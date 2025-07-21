@@ -30,6 +30,16 @@ android {
     }
 }
 
+private fun DependencyHandler.androidMainImplementation(dependencyNotation: Any) = add("androidMainImplementation", dependencyNotation)
+
+dependencies {
+    commonMainImplementation(compose.runtime)
+    commonMainImplementation(compose.foundation)
+    commonMainImplementation(libs.kotlinCoroutines)
+    androidMainImplementation(libs.androidAppCompat)
+    androidMainImplementation(libs.androidActivityCompose)
+}
+
 mavenPublishing {
     configure(
         KotlinMultiplatform(
