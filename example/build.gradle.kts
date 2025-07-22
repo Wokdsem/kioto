@@ -36,8 +36,13 @@ dependencies {
     commonMainImplementation(compose.runtime)
     commonMainImplementation(compose.foundation)
     commonMainImplementation(compose.material)
+    commonMainImplementation(compose.material3)
+    commonMainImplementation(compose.materialIconsExtended)
     commonMainImplementation(compose.components.uiToolingPreview)
 
     androidMainImplementation(libs.androidAppCompat)
     androidMainImplementation(libs.androidActivityCompose)
+    androidMainImplementation(libs.androidMaterial)
+
+    debugImplementation(compose.uiTooling)
 }
