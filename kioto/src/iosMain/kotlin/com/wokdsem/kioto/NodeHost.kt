@@ -30,10 +30,11 @@ import platform.UIKit.UIViewController
  * @see NodeNav
  *
  * @param navigation The NodeNav instance that handles navigation actions.
+ * @param onStackCleared A lambda that returns a fallback [NodeToken] to be navigated to in the event the [NodeNav] is fully cleared.
  */
 public fun nodeHost(
     navigation: NodeNav,
-    onStackCleared: () -> Unit,
+    onStackCleared: () -> NodeToken,
 ): UIViewController {
     return ComposeUIViewController {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -43,7 +44,7 @@ public fun nodeHost(
             NodeHost(
                 bundle = HostBundle(
                     navigation = navigation,
-                    onStackCleared = onStackCleared,
+                    onStackCleared = { navigation.setNavigation(onStackCleared) },
                     platform = Platform.IOS,
                     predictiveBackHandler = IosPredictiveBackHandler(events = dragEvents)
                 )

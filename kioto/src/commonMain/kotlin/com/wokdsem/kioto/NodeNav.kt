@@ -52,37 +52,40 @@ public class NodeNav(
      * @param rootNode A lambda that, when invoked, returns a [NodeToken] representing the root node of the new navigation graph.
      */
     public fun setNavigation(rootNode: () -> NodeToken) {
-        updateNav(navigationOrigin = null, transition = Transition.REPLACE) { stack.addLast(element = rootNode().asNavNode(tag = Tag.ROOT)) }
+        runOnUiThread {
+            updateNav(transition = Transition.REPLACE, release = { true }) {
+                rootNode().asNavNode(tag = Tag.ROOT)
+            }
+        }
     }
 
-    private inline fun updateNav(navigationOrigin: String?, transition: Transition, navigation: (release: NavNode.() -> Unit) -> Unit) {
-        runOnUiThread {
-            val observers = observers.values
-            fun NavNode.release() {
+    private inline fun updateNav(transition: Transition, release: (NavNode) -> Boolean, navigation: () -> NavNode?) {
+        val observers = observers.values
+
+        while (stack.isNotEmpty() && release(stack.last())) {
+            stack.removeLast().run {
                 navigator.invalidate()
                 onDestroy?.invoke()
                 this.node.destroy()
                 observers.forEach { observer -> observer.onClearedPane(id) }
             }
-
-            fun release(untilId: String?) = run { while (stack.isNotEmpty() && stack.last().id != untilId) stack.removeLast().release() }
-            release(navigationOrigin)
-            navigation(NavNode::release)
-            if (navigationOrigin == null) actualRootLoaded = false
-            if (stack.size < 2 && !actualRootLoaded) {
-                val rootFeat = if (stack.isNotEmpty()) rootParentSupplier(stack.first().token) else null
-                if (rootFeat != null) {
-                    stack.addFirst(element = rootFeat.asNavNode(tag = Tag.ROOT))
-                    actualRootLoaded = true
-                }
-            }
-            activePanes = when (stack.size) {
-                0 -> null
-                1 -> ActivePanes(foreground = stack.last().asPane(), background = null, transition = transition)
-                else -> ActivePanes(foreground = stack.last().asPane(), background = stack[stack.lastIndex - 1].asPane(), transition = transition)
-            }
-            observers.forEach { observer -> observer.onActivePanesChanged(activePanes) }
         }
+        if (stack.isEmpty()) actualRootLoaded = false
+
+        navigation()?.let { stack += it }
+        if (stack.size < 2 && !actualRootLoaded) {
+            val rootFeat = if (stack.isNotEmpty()) rootParentSupplier(stack.first().token) else null
+            if (rootFeat != null) {
+                stack.addFirst(element = rootFeat.asNavNode(tag = Tag.ROOT))
+                actualRootLoaded = true
+            }
+        }
+        activePanes = when (stack.size) {
+            0 -> null
+            1 -> ActivePanes(foreground = stack.last().asPane(), background = null, transition = transition)
+            else -> ActivePanes(foreground = stack.last().asPane(), background = stack[stack.lastIndex - 1].asPane(), transition = transition)
+        }
+        observers.forEach { observer -> observer.onActivePanesChanged(activePanes) }
     }
 
     private fun NodeToken.asNavNode(tag: Tag, onDestroy: (() -> Unit)? = null): NavNode {
@@ -118,8 +121,8 @@ public class NodeNav(
      */
     public fun presentStack(stackRootNode: () -> NodeToken) {
         runOnUiThread {
-            updateNav(stack.lastOrNull()?.id, Transition.BEGIN_STACK) {
-                stack += stackRootNode().asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK)
+            updateNav(Transition.BEGIN_STACK, { false }) {
+                stackRootNode().asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK)
             }
         }
     }
@@ -137,7 +140,7 @@ public class NodeNav(
         try {
             withContext(Dispatchers.Main) {
                 navNode = token.asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK) { completable.complete(Unit) }
-                updateNav(stack.lastOrNull()?.id, Transition.BEGIN_STACK) { stack += navNode }
+                updateNav(Transition.BEGIN_STACK, { false }) { navNode }
             }
             completable.await()
         } catch (e: CancellationException) {
@@ -160,55 +163,58 @@ public class NodeNav(
         private var released = false
 
         override fun navigate(node: () -> NodeToken) {
-            runNavigation(Transition.SIBLING) { stack += node().asNavNode(Tag.CHILD) }
+            runNavigation(Transition.SIBLING, release = { false }) { node().asNavNode(tag = if (stack.last().tag == Tag.ROOT) Tag.STACK else Tag.CHILD) }
         }
 
         override fun beginStack(stackRootNode: () -> NodeToken) {
-            runNavigation(Transition.BEGIN_STACK) { stack += stackRootNode().asNavNode(Tag.STACK) }
+            runNavigation(Transition.BEGIN_STACK, release = { false }) { stackRootNode().asNavNode(Tag.STACK) }
         }
 
         override fun replace(node: () -> NodeToken) {
-            runNavigation(Transition.REPLACE) { release ->
-                val origin = stack.removeLast().apply { release() }
-                if (origin.tag == Tag.ROOT) while (stack.isNotEmpty()) stack.removeLast().release()
-                stack += node().asNavNode(tag = origin.tag)
-            }
+            var replacedTag: Tag? = null
+            runNavigation(
+                transition = Transition.REPLACE,
+                release = { node -> (replacedTag == null || replacedTag == Tag.ROOT).also { replacedTag = node.tag } },
+                navigation = { node().asNavNode(tag = checkNotNull(replacedTag)) }
+            )
         }
 
         override fun replaceStack(stackRootNode: () -> NodeToken) {
-            runNavigation(Transition.REPLACE) { release ->
-                while (stack.last().tag == Tag.CHILD) stack.removeLast().release()
-                if (stack.last().tag == Tag.ROOT) return@runNavigation resetNavigation(stackRootNode)
-                stack.removeLast().release()
-                stack += stackRootNode().asNavNode(tag = Tag.STACK)
-            }
+            var replacedTag: Tag? = null
+            runNavigation(
+                transition = Transition.REPLACE,
+                release = { node -> (replacedTag != Tag.STACK).also { replacedTag = node.tag } },
+                navigation = { stackRootNode().asNavNode(tag = Tag.STACK) }
+            )
         }
 
         override fun navigateBack() {
-            runNavigation(Transition.BACK) { release ->
-                stack.removeLast().release()
-            }
+            var backRun = false
+            runNavigation(Transition.BACK, release = { !backRun.also { backRun = true } })
         }
 
         override fun navigateUp() {
-            runNavigation(Transition.CLOSE_STACK) { release ->
-                @Suppress("ControlFlowWithEmptyBody")
-                while (stack.isNotEmpty() && stack.removeLast().apply { release() }.tag == Tag.CHILD);
-            }
+            var upRun = false
+            runNavigation(Transition.CLOSE_STACK, release = { node -> !upRun.also { upRun = node.tag != Tag.CHILD } })
         }
 
         override fun popToRoot() {
-            runNavigation(Transition.CLOSE_STACK) { release ->
-                do {
-                    stack.removeLast().release()
-                } while (stack.isNotEmpty() && stack.last().tag != Tag.ROOT)
-            }
+            var onRoot = false
+            runNavigation(Transition.CLOSE_STACK, release = { node -> (node.tag != Tag.ROOT || !onRoot).also { onRoot = true } })
         }
 
-        private inline fun runNavigation(transition: Transition, navigation: (release: NavNode.() -> Unit) -> Unit) {
-            if (released) return checkOnUiThread()
-            updateNav(navigationOrigin = id, transition = transition) { release ->
-                navigation(release)
+        private inline fun runNavigation(transition: Transition, release: (NavNode) -> Boolean, navigation: () -> NavNode? = { null }) {
+            runOnUiThread {
+                if (released) return@runOnUiThread
+                var originAchieved = false
+                updateNav(
+                    transition = transition,
+                    release = {
+                        if (!originAchieved && it.id == id) originAchieved = true
+                        !originAchieved || release(it)
+                    },
+                    navigation = navigation
+                )
             }
         }
 

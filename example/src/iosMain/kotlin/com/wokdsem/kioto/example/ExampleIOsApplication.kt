@@ -5,6 +5,6 @@ import com.wokdsem.kioto.nodeHost
 
 object ExampleIOsApplication {
 
-    fun getNodeNavUIViewController() = nodeHost(navigation = nodeNav, onStackCleared = { nodeNav.setNavigation { Demo.Token } })
+    fun getNodeNavUIViewController() = nodeHost(navigation = nodeNav, onStackCleared = { Demo.Token })
 
 }

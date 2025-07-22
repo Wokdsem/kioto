@@ -23,7 +23,7 @@ class Navigation : Node<Navigation.State>() {
     }
 
     private fun List<List<Int>>.beginStack() = toMutableList().apply { add(listOf(next)) }
-    private fun List<List<Int>>.navigate() = toMutableList().apply { this[lastIndex] = this[lastIndex].toMutableList().apply { add(next) } }
+    private fun List<List<Int>>.navigate() = if (size == 1) beginStack() else toMutableList().apply { this[lastIndex] = this[lastIndex].toMutableList().apply { add(next) } }
     private fun List<List<Int>>.replace() = toMutableList().apply { this[lastIndex] = this[lastIndex].toMutableList().apply { this[lastIndex] = this@replace.next } }
     private fun List<List<Int>>.replaceStack() = toMutableList().apply { this[lastIndex] = listOf(next) }
 
