@@ -4,23 +4,22 @@
 
 Kioto is a lightweight and robust ui framework that streamlines navigation management in Compose Multiplatform Mobile applications.
 Its structured approach promotes a clear separation of concerns and improves code maintainability across your mobile projects.
----
 
 ## Why Kioto?
 
 In the evolving landscape of Compose Multiplatform Mobile development, managing complex navigation flows and maintaining a clean architecture can be challenging.
 Kioto addresses these challenges by offering a lightweight and opinionated solution designed to:
 
-* Simplify Navigation: Define your application's UI as modular Node components, making navigation intuitive and easy to reason about.
-* Promote Clear Architecture: Enforce a strict separation of concerns, leading to more maintainable and testable code.
-* Ensure Multiplatform Consistency: Provide a unified navigation API that works seamlessly across Android and iOS, reducing platform-specific boilerplate.
-* Enhance State Management: Leverage a robust state management system within each Node, ensuring predictable UI updates and a responsive user experience.
+* **Simplify Navigation** Define your application's UI as modular Node components, making navigation intuitive and easy to reason about.
+* **Promote Clear Architecture** Enforce a strict separation of concerns, leading to more maintainable and testable code.
+* **Ensure Multiplatform Consistency** Provide a unified navigation API that works seamlessly across Android and iOS, reducing platform-specific boilerplate.
+* **Enhance State Management** Leverage a robust state management system within each Node, ensuring predictable UI updates and a responsive user experience.
 
 Kioto helps you build scalable and robust Compose Multiplatform Mobile applications with confidence and efficiency.
 
-| Android                                  | <div style="width:280px">iOS</div> |
-|------------------------------------------|------------------------------------|
-| ![Android demo](assets/android_demo.gif) | ![iOS demo](assets/ios_demo.gif)   |
+| Android                                                        | iOS                                                        |
+|----------------------------------------------------------------|------------------------------------------------------------|
+| <img src="assets/android_demo.gif" alt="alt text" width="380"> | <img src="assets/ios_demo.gif" alt="alt text" width="380"> |
 
 ## Kioto at work
 
@@ -211,10 +210,12 @@ Let's review the available navigation methods for Nodes:
 
 * `resetNavigation`
   Pops all the stacks and their nodes, and starts a new navigation stack.
+
 <div style="text-align:center"><img src="assets/nav_reset_navigation.png" alt="alt text" width="380"></div>
 
 * `navigate`
   Transitions to the specified node within the current navigation stack, except if called from a root node, in which case it begins a new stack.
+
 <div style="text-align:center">
 <img src="assets/nav_navigate.png" alt="alt text" width="380">
 <img src="assets/nav_navigate_root.png" alt="alt text" width="380">
@@ -222,27 +223,33 @@ Let's review the available navigation methods for Nodes:
 
 * `beginStack`
   Starts a new stack with the specified node as the stack root node.
+
 <div style="text-align:center"><img src="assets/nav_begin_stack.png" alt="alt text" width="380"></div>
 
 * `replace`
   Replaces the current node with the specified node. Replacing a root node behaves as if `resetNavigation` was called.
+
 <div style="text-align:center"><img src="assets/nav_replace.png" alt="alt text" width="380"></div>
 
 * `replaceStack`
   Starts a new stack replacing the node's current stack. Replacing the stack of a root node behaves as if `resetNavigation` was called.
+
 <div style="text-align:center"><img src="assets/nav_replace_stack.png" alt="alt text" width="380"></div>
 
 * `navigateBack`
   Pops the node from the stack.
+
 <div style="text-align:center"><img src="assets/nav_navigate_back.png" alt="alt text" width="380"></div>
 
 * `navigateUp`
   Pops all the nodes belonging to the node's stack.
+
 <div style="text-align:center"><img src="assets/nav_navigate_up.png" alt="alt text" width="380"></div>
 
 * `popToRoot`
   Pops all the nodes in the stack until the root node is reached, unless the node that initiates the navigation is a root node, in which case it behaves as if
   `navigateBack` was called.
+
 <div style="text-align:center"><img src="assets/nav_pop_to_root.png" alt="alt text" width="380"></div>
 
 Navigation events are usually triggered by the latest added node, however, there's nothing by design that prevents from navigating from any previous node in the stack.
@@ -327,9 +334,9 @@ Kioto supports predictive back gestures, allowing users to navigate back in the 
 Follow official Android documentation to enable predictive back gesture in your Android
 application: [Predictive back gesture](https://developer.android.com/guide/navigation/predictive-back-gesture).
 
-| Android                                       | <div style="width:280px">iOS</div>    |
-|-----------------------------------------------|---------------------------------------|
-| ![PBG Android](assets/predictive_android.gif) | ![PBG iOS](assets/predictive_ios.gif) |
+| Android                                                              | iOS                                                              |
+|----------------------------------------------------------------------|------------------------------------------------------------------|
+| <img src="assets/predictive_android.gif" alt="alt text" width="380"> | <img src="assets/predictive_ios.gif" alt="alt text" width="380"> |
 
 #### Root parent supplier
 
@@ -347,12 +354,27 @@ internal val nodeNav = NodeNav { token ->
 }
 ```
 
+## Add kioto to your project
+
+Add the dependency to your project `build.gradle` file:
+
+```kotlin
+kotlin {
+    //...
+    sourceSets {
+        commonMain.dependencies {
+            implementation("com.wokdsem.kioto:kioto:0.1.2")
+        }
+    }
+}
+```
+Available on [Maven Central](https://central.sonatype.com/artifact/com.wokdsem.kioto/kioto)
+
 ### Android
 
 Use `NodeHost` composable function to render a `NodeNav` instance in your Android application.
 
 ```kotlin
-// Android 
 class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
