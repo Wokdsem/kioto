@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.mavenPublish)
+    alias(libs.plugins.dokka)
 }
 
 kotlin {
@@ -43,8 +44,8 @@ dependencies {
 mavenPublishing {
     configure(
         KotlinMultiplatform(
-            javadocJar = JavadocJar.None(),
-            sourcesJar = false,
+            javadocJar = JavadocJar.Dokka("dokkaHtml"),
+            sourcesJar = true,
             androidVariantsToPublish = listOf("release"),
         )
     )
