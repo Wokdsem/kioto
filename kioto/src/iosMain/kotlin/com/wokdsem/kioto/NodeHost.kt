@@ -15,13 +15,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeUIViewController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import platform.UIKit.UIViewController
 
 /**
@@ -46,7 +45,7 @@ public fun nodeHost(
                     navigation = navigation,
                     onStackCleared = { navigation.setNavigation(onStackCleared) },
                     platform = Platform.IOS,
-                    predictiveBackHandler = IosPredictiveBackHandler(events = dragEvents)
+                    backHandler = IosPredictiveBackHandler(events = dragEvents)
                 )
             )
             Box(modifier = Modifier.fillMaxHeight().width(16.dp).background(Color.Transparent).pointerInput(Unit) {
@@ -70,30 +69,23 @@ public fun nodeHost(
 
 private class IosPredictiveBackHandler(
     private val events: Flow<PredictiveBackEvents>
-) : PredictiveBackHandler {
-    override fun register(callback: PredictiveBackHandler.Callback): Releasable {
-        return with(receiver = CoroutineScope(context = Dispatchers.Main)) {
-            launch {
-                events
-                    .dropWhile { it is PredictiveBackEvents.BackPressed || it is PredictiveBackEvents.Cancelled }
-                    .collect(object : FlowCollector<PredictiveBackEvents> {
-                        var firstRun = false
-                        override suspend fun emit(value: PredictiveBackEvents) {
-                            if (!firstRun) {
-                                if (value is PredictiveBackEvents.Progressed) callback.onBackStarted()
-                                firstRun = true
-                            }
-                            when (value) {
-                                PredictiveBackEvents.Started -> callback.onBackStarted()
-                                is PredictiveBackEvents.Progressed -> callback.onBackProgressed(value.progress)
-                                PredictiveBackEvents.Cancelled -> callback.onBackCancelled()
-                                PredictiveBackEvents.BackPressed -> callback.onBackPressed()
-                            }
-                        }
-                    })
+) : BackHandler {
+    override fun register(callback: BackHandler.Callback): Releasable {
+        return events.dropWhile { it is PredictiveBackEvents.BackPressed || it is PredictiveBackEvents.Cancelled }.run {
+            var firstRun = false
+            onEach { event ->
+                if (!firstRun) {
+                    if (event is PredictiveBackEvents.Progressed) callback.onBackStarted()
+                    firstRun = true
+                }
+                when (event) {
+                    PredictiveBackEvents.Started -> callback.onBackStarted()
+                    is PredictiveBackEvents.Progressed -> callback.onBackProgressed(event.progress)
+                    PredictiveBackEvents.Cancelled -> callback.onBackCancelled()
+                    PredictiveBackEvents.BackPressed -> callback.onBackPressed()
+                }
             }
-            Releasable(this::cancel)
-        }
+        }.launchIn(CoroutineScope(Dispatchers.Main)).let { Releasable(it::cancel) }
     }
 }
 

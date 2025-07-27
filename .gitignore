@@ -5,3 +5,4 @@
 build/
 */local.properties
 /exampleIOs/iosApp.xcodeproj/
+/local.properties

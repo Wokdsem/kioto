@@ -36,7 +36,7 @@ fun Screen(
                 title = { Text(title) },
                 navigationIcon = {
                     when (navigation) {
-                        Navigation.BACK -> IconButton(onClick = { nodeNavigation?.onBackPressed() }) {
+                        Navigation.BACK -> IconButton(onClick = { nodeNavigation?.navigateBack() }) {
                             Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
                         }
 

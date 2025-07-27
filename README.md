@@ -363,7 +363,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.1.2")
+            implementation("com.wokdsem.kioto:kioto:0.1.3")
         }
     }
 }
@@ -446,7 +446,7 @@ Text(text = "Platform: $text")
 
 ```kotlin
 val nodeNavigation = LocalNodeNavigation.current
-IconButton(onClick = { nodeNavigation?.onBackPressed() }) {
+IconButton(onClick = { nodeNavigation?.navigateBack() }) {
     Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
 }
 ```

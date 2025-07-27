@@ -8,6 +8,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 public val LocalPlatform: ProvidableCompositionLocal<Platform?> = staticCompositionLocalOf { null }
 
+public enum class Platform { ANDROID, IOS }
+
 /**
  * Composition local for the navigation interface of [NodeNavigation].
  * This is used to request a back action.
@@ -16,11 +18,11 @@ public val LocalPlatform: ProvidableCompositionLocal<Platform?> = staticComposit
  */
 public val LocalNodeNavigation: ProvidableCompositionLocal<NodeNavigation?> = staticCompositionLocalOf { null }
 
-public enum class Platform { ANDROID, IOS }
-
 public fun interface NodeNavigation {
     /**
      * Requests a back action from the current node.
      */
-    public fun onBackPressed()
+    public fun navigateBack()
 }
+
+internal val LocalBackHandler: ProvidableCompositionLocal<BackHandler?> = staticCompositionLocalOf { null }
