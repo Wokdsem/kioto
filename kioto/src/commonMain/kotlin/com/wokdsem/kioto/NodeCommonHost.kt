@@ -18,6 +18,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.SaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -35,7 +36,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.mapLatest
@@ -79,104 +79,111 @@ internal fun NodeHost(bundle: HostBundle) {
     val stateHolder = rememberSaveableStateHolder()
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         var visiblePanes by remember { mutableStateOf<List<ActivePane>>(emptyList()) }
+        val heldNodes = rememberSaveable { mutableListOf<String>() }
         LaunchedEffect(bundle) {
-            val panes = MutableStateFlow<NodeNav.ActivePanes?>(null)
             val (nodeNav, onStackCleared, platform, backHandler) = bundle
-            nodeNav.observeNavigation(object : NodeNav.NodeNavObserver {
-                override fun onClearedPane(paneId: PaneId) = stateHolder.removeState(paneId)
-                override fun onActivePanesChanged(activePanes: NodeNav.ActivePanes?) = run { panes.value = activePanes }
-            }).use {
-                var pastTransitionProgress = 1F
-                panes.dropWhile { it == null }.onEach { if (it == null) onStackCleared() }.mapNotNull { it }.mapLatest { activePanes ->
-                    val target = StablePane(pane = activePanes.foreground)
-                    val backPressedToken = backHandler.takeUnless { platform == Platform.IOS || activePanes.background == null }
-                        ?.register(callback = BackPressedCallback(activePanes.foreground.navBack))
-                    try {
-                        withContext(Dispatchers.IO) {
-                            val noticeableBackward = visiblePanes.size == 2 && visiblePanes.first().id == target.id
-                            val (animator, duration, type, targetModifier, currentModifier) = when {
-                                noticeableBackward -> backwardAnimation(maxWidth, pastTransitionProgress)
-                                visiblePanes.size != 1 -> replaceAnimation()
-                                else -> when (activePanes.transition) {
-                                    Transition.BEGIN_STACK, Transition.SIBLING -> forwardAnimation(maxWidth)
-                                    Transition.CLOSE_STACK, Transition.BACK -> backwardAnimation(maxWidth)
-                                    Transition.REPLACE -> replaceAnimation()
-                                }
+            var pastTransitionProgress = 1F
+            nodeNav.activePanes.dropWhile { it == null }.onEach { activePanes ->
+                if (heldNodes.isNotEmpty() && heldNodes.last() == activePanes?.activeIds?.lastOrNull()?.id) return@onEach
+                val refId = when (activePanes?.transition) {
+                    Transition.BEGIN_STACK, Transition.SIBLING, Transition.REPLACE -> activePanes.activeIds.getOrNull(activePanes.activeIds.lastIndex - 1)
+                    Transition.CLOSE_STACK, Transition.BACK -> activePanes.activeIds.lastOrNull()
+                    null -> null
+                }?.id
+                while (heldNodes.isNotEmpty() && heldNodes.last() != refId) heldNodes.removeLast().let(stateHolder::removeState)
+                if (activePanes?.transition?.run { this == Transition.BEGIN_STACK || this == Transition.SIBLING || this == Transition.REPLACE } == true) {
+                    if (heldNodes.isEmpty() && activePanes.activeIds.size == 2) heldNodes += activePanes.activeIds.first().id
+                    heldNodes += activePanes.activeIds.last().id
+                }
+            }.onEach { if (it == null) onStackCleared() }.mapNotNull { it }.mapLatest { activePanes ->
+                val target = StablePane(pane = activePanes.foreground)
+                val backPressedToken = backHandler.takeUnless { platform == Platform.IOS || activePanes.background == null }
+                    ?.register(callback = BackPressedCallback(activePanes.foreground.navBack))
+                try {
+                    withContext(Dispatchers.IO) {
+                        val noticeableBackward = visiblePanes.size == 2 && visiblePanes.first().id == target.id
+                        val (animator, duration, type, targetModifier, currentModifier) = when {
+                            noticeableBackward -> backwardAnimation(maxWidth, pastTransitionProgress)
+                            visiblePanes.size != 1 -> replaceAnimation()
+                            else -> when (activePanes.transition) {
+                                Transition.BEGIN_STACK, Transition.SIBLING -> forwardAnimation(maxWidth)
+                                Transition.CLOSE_STACK, Transition.BACK -> backwardAnimation(maxWidth)
+                                Transition.REPLACE -> replaceAnimation()
                             }
-                            visiblePanes = when (type) {
-                                Type.FORWARD -> visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) } + ActivePane(target, targetModifier)
+                        }
+                        visiblePanes = when (type) {
+                            Type.FORWARD -> visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) } + ActivePane(target, targetModifier)
 
-                                Type.REPLACE -> (visiblePanes.asSequence().filter { it.id != target.id }.map { it.copy(modifier = it.modifier then currentModifier) } +
-                                        ActivePane(target, targetModifier)).toList()
+                            Type.REPLACE -> (visiblePanes.asSequence().filter { it.id != target.id }.map { it.copy(modifier = it.modifier then currentModifier) } +
+                                    ActivePane(target, targetModifier)).toList()
 
-                                Type.BACKWARD -> when {
-                                    noticeableBackward -> listOf(visiblePanes[0].copy(modifier = targetModifier), visiblePanes[1].copy(modifier = currentModifier))
-                                    else -> {
-                                        when (val targetIndex = visiblePanes.indexOfFirst { it.id == target.id }) {
-                                            -1 -> listOf(ActivePane(target, targetModifier)) + visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) }
-                                            else -> visiblePanes.mapIndexed { index, pane -> pane.copy(modifier = if (targetIndex == index) targetModifier else pane.modifier then currentModifier) }
-                                        }
+                            Type.BACKWARD -> when {
+                                noticeableBackward -> listOf(visiblePanes[0].copy(modifier = targetModifier), visiblePanes[1].copy(modifier = currentModifier))
+                                else -> {
+                                    when (val targetIndex = visiblePanes.indexOfFirst { it.id == target.id }) {
+                                        -1 -> listOf(ActivePane(target, targetModifier)) + visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) }
+                                        else -> visiblePanes.mapIndexed { index, pane -> pane.copy(modifier = if (targetIndex == index) targetModifier else pane.modifier then currentModifier) }
                                     }
                                 }
                             }
-                            runCatching {
-                                animator.animateTo(1F, animationSpec = tween(durationMillis = duration, easing = LinearEasing))
-                            }.onFailure {
-                                pastTransitionProgress = animator.value
-                            }.getOrThrow()
                         }
+                        runCatching {
+                            animator.animateTo(1F, animationSpec = tween(durationMillis = duration, easing = LinearEasing))
+                        }.onFailure {
+                            pastTransitionProgress = animator.value
+                        }.getOrThrow()
+                    }
+                } finally {
+                    backPressedToken?.release()
+                }
+
+                val targetPanes = listOf(ActivePane(pane = target, modifier = Modifier))
+                visiblePanes = targetPanes
+                if (activePanes.background != null) {
+                    val predictiveEvents: Channel<suspend () -> Unit> = Channel(capacity = Channel.BUFFERED, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+                    val backPredictiveAnimator = Animatable(0F)
+                    val predictiveBackToken = backHandler.register(object : BackHandler.Callback {
+                        val predictivePanes = listOf(
+                            ActivePane(pane = StablePane(activePanes.background), modifier = slideInFromLeft(maxWidth, backPredictiveAnimator.asState())),
+                            ActivePane(pane = target, modifier = slideOutToRight(maxWidth, backPredictiveAnimator.asState()))
+                        )
+
+                        override fun onBackStarted() {
+                            predictiveEvents.trySend {
+                                visiblePanes = predictivePanes
+                                backPredictiveAnimator.animateTo(0F)
+                            }
+                        }
+
+                        override fun onBackProgressed(progress: Float) {
+                            predictiveEvents.trySend {
+                                backPredictiveAnimator.snapTo(progress)
+                            }
+                        }
+
+                        override fun onBackPressed() {
+                            target.pane.navBack()
+                        }
+
+                        override fun onBackCancelled() {
+                            predictiveEvents.trySend {
+                                backPredictiveAnimator.animateTo(0F)
+                                visiblePanes = targetPanes
+                            }
+                        }
+                    })
+                    try {
+                        while (true) predictiveEvents.receive().invoke()
+                    } catch (e: Throwable) {
+                        pastTransitionProgress = 1 - backPredictiveAnimator.value
+                        throw e
                     } finally {
-                        backPressedToken?.release()
+                        predictiveBackToken.release()
                     }
-
-                    val targetPanes = listOf(ActivePane(pane = target, modifier = Modifier))
-                    visiblePanes = targetPanes
-                    if (activePanes.background != null) {
-                        val predictiveEvents: Channel<suspend () -> Unit> = Channel(capacity = Channel.BUFFERED, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-                        val backPredictiveAnimator = Animatable(0F)
-                        val predictiveBackToken = backHandler.register(object : BackHandler.Callback {
-                            val predictivePanes = listOf(
-                                ActivePane(pane = StablePane(activePanes.background), modifier = slideInFromLeft(maxWidth, backPredictiveAnimator.asState())),
-                                ActivePane(pane = target, modifier = slideOutToRight(maxWidth, backPredictiveAnimator.asState()))
-                            )
-
-                            override fun onBackStarted() {
-                                predictiveEvents.trySend {
-                                    visiblePanes = predictivePanes
-                                    backPredictiveAnimator.animateTo(0F)
-                                }
-                            }
-
-                            override fun onBackProgressed(progress: Float) {
-                                predictiveEvents.trySend {
-                                    backPredictiveAnimator.snapTo(progress)
-                                }
-                            }
-
-                            override fun onBackPressed() {
-                                target.pane.navBack()
-                            }
-
-                            override fun onBackCancelled() {
-                                predictiveEvents.trySend {
-                                    backPredictiveAnimator.animateTo(0F)
-                                    visiblePanes = targetPanes
-                                }
-                            }
-                        })
-                        try {
-                            while (true) predictiveEvents.receive().invoke()
-                        } catch (e: Throwable) {
-                            pastTransitionProgress = 1 - backPredictiveAnimator.value
-                            throw e
-                        } finally {
-                            predictiveBackToken.release()
-                        }
-                    } else {
-                        pastTransitionProgress = 1F
-                    }
-                }.collect()
-            }
+                } else {
+                    pastTransitionProgress = 1F
+                }
+            }.collect()
         }
         CompositionLocalProvider(
             LocalStateHolder provides stateHolder,

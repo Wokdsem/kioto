@@ -6,6 +6,8 @@ import com.wokdsem.kioto.NodeNav.NavNode.Tag
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -42,9 +44,10 @@ public class NodeNav(
 
     private val stack: ArrayDeque<NavNode> = ArrayDeque()
     private var actualRootLoaded: Boolean = false
-    private var activePanes: ActivePanes? = null
 
-    private val observers: MutableMap<String, NodeNavObserver> = mutableMapOf()
+    private val navActivePanes: MutableStateFlow<ActivePanes?> = MutableStateFlow(value = null)
+
+    internal val activePanes: Flow<ActivePanes?> get() = navActivePanes
 
     /**
      * If any, pops all the stacks and their nodes, and starts a new navigation stack with the specified root node.
@@ -60,14 +63,11 @@ public class NodeNav(
     }
 
     private inline fun updateNav(transition: Transition, release: (NavNode) -> Boolean, navigation: () -> NavNode?) {
-        val observers = observers.values
-
         while (stack.isNotEmpty() && release(stack.last())) {
             stack.removeLast().run {
                 navigator.invalidate()
                 onDestroy?.invoke()
                 this.node.destroy()
-                observers.forEach { observer -> observer.onClearedPane(id) }
             }
         }
         if (stack.isEmpty()) actualRootLoaded = false
@@ -80,12 +80,11 @@ public class NodeNav(
                 actualRootLoaded = true
             }
         }
-        activePanes = when (stack.size) {
+        navActivePanes.value = when (stack.size) {
             0 -> null
-            1 -> ActivePanes(foreground = stack.last().asPane(), background = null, transition = transition)
-            else -> ActivePanes(foreground = stack.last().asPane(), background = stack[stack.lastIndex - 1].asPane(), transition = transition)
+            1 -> ActivePanes(foreground = stack.last().asPane(), background = null, transition = transition, activeIds = stack)
+            else -> ActivePanes(foreground = stack.last().asPane(), background = stack[stack.lastIndex - 1].asPane(), transition = transition, activeIds = stack)
         }
-        observers.forEach { observer -> observer.onActivePanesChanged(activePanes) }
     }
 
     private fun NodeToken.asNavNode(tag: Tag, onDestroy: (() -> Unit)? = null): NavNode {
@@ -147,13 +146,6 @@ public class NodeNav(
             withContext(NonCancellable + Dispatchers.Main) { navNode?.navigator?.navigateUp() }
             throw e
         }
-    }
-
-    internal fun observeNavigation(observer: NodeNavObserver): Releasable {
-        val id = Uuid.random().toString()
-        observers[id] = observer
-        if (activePanes != null) observer.onActivePanesChanged(activePanes)
-        return Releasable { observers.remove(id) }
     }
 
     private inner class NodeNavigator(
@@ -225,25 +217,22 @@ public class NodeNav(
         }
     }
 
+    internal open class NavNodeId(val id: String)
+
     private class NavNode(
-        val id: String,
+        id: String,
         val tag: Tag,
         val token: NodeToken,
         val node: Node<*>,
         val navigator: NodeNavigator,
         val onDestroy: (() -> Unit)?
-    ) {
+    ) : NavNodeId(id) {
         enum class Tag { CHILD, STACK, ROOT }
-    }
-
-    internal interface NodeNavObserver {
-        fun onActivePanesChanged(activePanes: ActivePanes?)
-        fun onClearedPane(paneId: PaneId)
     }
 
     internal enum class Transition { BEGIN_STACK, SIBLING, REPLACE, CLOSE_STACK, BACK }
 
-    internal class ActivePanes(val foreground: Pane<*>, val background: Pane<*>?, val transition: Transition)
+    internal class ActivePanes(val foreground: Pane<*>, val background: Pane<*>?, val transition: Transition, val activeIds: List<NavNodeId>)
 
     internal class Pane<S : Any>(
         val id: PaneId,
