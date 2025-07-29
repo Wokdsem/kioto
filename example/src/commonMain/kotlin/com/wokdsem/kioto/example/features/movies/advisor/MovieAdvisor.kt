@@ -4,6 +4,8 @@ import com.wokdsem.kioto.Node
 import com.wokdsem.kioto.NodeToken
 import com.wokdsem.kioto.example.data.suggestMovie
 import com.wokdsem.kioto.example.domain.Movie
+import com.wokdsem.kioto.example.features.logger
+import com.wokdsem.kioto.example.features.movies.movie.MovieDetail
 
 class MovieAdvisor : Node<MovieAdvisor.State>() {
 
@@ -15,7 +17,7 @@ class MovieAdvisor : Node<MovieAdvisor.State>() {
     object Token : NodeToken {
         override fun node() = node(::MovieAdvisor, ::State) {
             MovieAdvisorView(object : MovieAdvisorView.ViewListener {
-                override fun onSeeMore(movie: Movie): Unit = nav.navigate { com.wokdsem.kioto.example.features.movies.movie.MovieDetail.Token(movie) }
+                override fun onSeeMore(movie: Movie) = seeMore(movie)
                 override fun onNext() = adviseNextMovie()
             })
         }
@@ -23,6 +25,12 @@ class MovieAdvisor : Node<MovieAdvisor.State>() {
 
     init {
         subscribe(::suggestMovie) { updateState { state.copy(movie = this) } }
+    }
+
+    private fun seeMore(movie: Movie) {
+        nav.navigate { MovieDetail.Token(movie) }.also {
+            logger().log("See more about ${movie.title}")
+        }
     }
 
     private fun adviseNextMovie() {

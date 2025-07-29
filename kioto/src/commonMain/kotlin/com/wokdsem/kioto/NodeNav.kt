@@ -27,6 +27,15 @@ import kotlin.uuid.Uuid
  * The node starting the navigation is known as the root node. A root node cannot share its stack with any other node, so any
  * navigation initiated from a root node will create a new stack.
  *
+ *
+ * [NodeNav] has an associated [NodeContext] that provides context to the nodes hosted by the [NodeNav] instance.
+ * [Node] can leverage the context to access dependencies, retrieve scoped configurations, or any other helpful operation that this flexible approach allows.
+ *
+ * @see NodeContext
+ * @see ProvidedValue
+ * @see ProvidableContext
+ *
+ *
  * If a ([NodeToken]) -> [NodeToken]? is provided when instantiating [NodeNav], this lambda will be executed to determine
  * the parent node of a root node. The parent node of a root node is also treated as a root node, meaning it will create its own independent
  * stack at the beginning of the navigation.
@@ -35,13 +44,16 @@ import kotlin.uuid.Uuid
  * The parent node of a root node is also treated as a root node, meaning it will create its own independent
  * stack at the beginning of the navigation history and cannot share its stack with other nodes added at that level.
  *
+ * @param context - A [NodeContext] that provides context to the nodes hosted by the [NodeNav] instance.
  * @param rootParentSupplier - A lambda that receives the root [NodeToken] and returns an optional [NodeToken] identifying the parent node of the root node.
  */
 @OptIn(ExperimentalUuidApi::class)
 public class NodeNav(
+    context: NodeContext = context(),
     private val rootParentSupplier: (NodeToken) -> NodeToken? = { null }
 ) {
 
+    private val contextSupplier = context.asContextSupplier()
     private val stack: ArrayDeque<NavNode> = ArrayDeque()
     private var actualRootLoaded: Boolean = false
 
@@ -96,7 +108,7 @@ public class NodeNav(
 
     private fun <F : Node<S>, S : Any> buildNode(token: Token<F, S>, navigator: Navigator): Node<S> {
         return Node.bundle.hold(
-            value = Node.Companion.Bundle(token.state, token.view, navigator),
+            value = Node.Companion.Bundle(token.state, token.view, contextSupplier = contextSupplier, navigator),
             action = token.node
         )
     }

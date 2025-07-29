@@ -77,7 +77,7 @@ public interface NodeView<S : Any> {
  * Instance of Node can subscribe to suspend functions and flows using [subscribe] and [flowSubscribe] respectively.
  * These subscriptions are cooperatively canceled when the node is cleared.
  */
-public abstract class Node<S : Any> {
+public abstract class Node<S : Any> : ContextSupplier {
 
     public companion object {
 
@@ -97,7 +97,7 @@ public abstract class Node<S : Any> {
             node: () -> N, initialState: () -> S, view: N.() -> NodeView<S>
         ): NodeToken.Node = NodeToken.Node(token = Token(node, initialState, view))
 
-        internal class Bundle<N : Node<S>, S : Any>(val state: () -> S, val view: N.() -> NodeView<S>, val navigator: Navigator)
+        internal class Bundle<N : Node<S>, S : Any>(val state: () -> S, val view: N.() -> NodeView<S>, val contextSupplier: ContextSupplier, val navigator: Navigator)
 
         internal class NodeHolder<T> {
             private var holder: T? = null
@@ -126,6 +126,7 @@ public abstract class Node<S : Any> {
     protected val nav: Navigator
 
     private val nodeMutableState: MutableStateFlow<S>
+    private val contextSupplier: ContextSupplier
     private val scope: CoroutineScope = CoroutineScope(context = SupervisorJob() + Dispatchers.Main.immediate)
     private var cleared: Boolean = false
 
@@ -134,6 +135,7 @@ public abstract class Node<S : Any> {
         (bundle.value as Bundle<Node<S>, S>).run {
             val view: Node<S>.() -> NodeView<S> = view
             this@Node.nav = navigator
+            this@Node.contextSupplier = contextSupplier
             this@Node.nodeMutableState = MutableStateFlow(value = state())
             this@Node.viewBuilder = { this@Node.view() }
         }
@@ -143,6 +145,10 @@ public abstract class Node<S : Any> {
         cleared = true
         scope.cancel()
         onCleared()
+    }
+
+    override fun <T> ProvidableContext<T>.invoke(): T {
+        return contextSupplier.run { this@invoke.invoke() }
     }
 
     /**

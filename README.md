@@ -338,6 +338,55 @@ application: [Predictive back gesture](https://developer.android.com/guide/navig
 |----------------------------------------------------------------------|------------------------------------------------------------------|
 | <img src="assets/predictive_android.gif" alt="alt text" width="380"> | <img src="assets/predictive_ios.gif" alt="alt text" width="380"> |
 
+#### Node context
+
+`NodeNav` can provide a scoped context to the `Node` instances it hosts. Contexts are unbounded, since they can hold any number of properties.
+DI graphs, configuration parameters, node's dependencies, are just a few examples of how you can take advantage of this feature.
+
+Context properties are identified by a `ProvidableContext` key. `Node`s uses this key to retrieve the context properties they need.
+
+```kotlin
+val logger = contextKeyOf<Logger>() // Declare a context key for Logger
+
+val nodeNav = NodeNav(
+  context = context(
+    // Associate logger key to Logger supplier lambda, instances are created lazily and reused.
+    logger provides { Logger(::println) } 
+  )  
+)
+
+class MovieAdvisor : Node<MovieAdvisor.State>() {
+
+  data class State(
+    val movie: Movie? = null
+  )
+
+  object Token : NodeToken {
+    override fun node() = node(::MovieAdvisor, ::State) {
+      MovieAdvisorView(object : MovieAdvisorView.ViewListener {
+        override fun onSeeMore(movie: Movie) = seeMore(movie)
+      })
+    }
+  }
+
+  init {
+    subscribe(::suggestMovie) { updateState { state.copy(movie = this) } }
+  }
+
+  private fun seeMore(movie: Movie) {
+    nav.navigate { MovieDetail.Token(movie) }.also {
+      // Retrieve the context property by invoking () the key  
+      logger().log("See more about ${movie.title}") 
+    }
+  }
+
+}
+
+fun interface Logger {
+  fun log(message: String)
+}
+```
+
 #### Root parent supplier
 
 When instantiating a `NodeNav`, you can provide a `rootParentSupplier` that will be used to determine the parent of the root node.
@@ -363,7 +412,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.1.3")
+            implementation("com.wokdsem.kioto:kioto:0.1.5")
         }
     }
 }
