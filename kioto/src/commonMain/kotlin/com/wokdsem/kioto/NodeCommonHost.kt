@@ -86,12 +86,12 @@ internal fun NodeHost(bundle: HostBundle) {
             nodeNav.activePanes.dropWhile { it == null }.onEach { activePanes ->
                 if (heldNodes.isNotEmpty() && heldNodes.last() == activePanes?.activeIds?.lastOrNull()?.id) return@onEach
                 val refId = when (activePanes?.transition) {
-                    Transition.BEGIN_STACK, Transition.SIBLING, Transition.REPLACE -> activePanes.activeIds.getOrNull(activePanes.activeIds.lastIndex - 1)
+                    Transition.BEGIN_STACK, Transition.PRESENT_STACK, Transition.SIBLING, Transition.REPLACE -> activePanes.activeIds.getOrNull(activePanes.activeIds.lastIndex - 1)
                     Transition.CLOSE_STACK, Transition.BACK -> activePanes.activeIds.lastOrNull()
                     null -> null
                 }?.id
                 while (heldNodes.isNotEmpty() && heldNodes.last() != refId) heldNodes.removeLast().let(stateHolder::removeState)
-                if (activePanes?.transition?.run { this == Transition.BEGIN_STACK || this == Transition.SIBLING || this == Transition.REPLACE } == true) {
+                if (activePanes?.transition?.run { this == Transition.BEGIN_STACK || this == Transition.PRESENT_STACK || this == Transition.SIBLING || this == Transition.REPLACE } == true) {
                     if (heldNodes.isEmpty() && activePanes.activeIds.size == 2) heldNodes += activePanes.activeIds.first().id
                     heldNodes += activePanes.activeIds.last().id
                 }
@@ -108,7 +108,7 @@ internal fun NodeHost(bundle: HostBundle) {
                             else -> when (activePanes.transition) {
                                 Transition.BEGIN_STACK, Transition.SIBLING -> forwardAnimation(maxWidth)
                                 Transition.CLOSE_STACK, Transition.BACK -> backwardAnimation(maxWidth)
-                                Transition.REPLACE -> replaceAnimation()
+                                Transition.PRESENT_STACK, Transition.REPLACE -> replaceAnimation()
                             }
                         }
                         visiblePanes = when (type) {

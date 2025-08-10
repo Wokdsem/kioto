@@ -132,7 +132,7 @@ public class NodeNav(
      */
     public fun presentStack(stackRootNode: () -> NodeToken) {
         runOnUiThread {
-            updateNav(Transition.BEGIN_STACK, { false }) {
+            updateNav(Transition.PRESENT_STACK, { false }) {
                 stackRootNode().asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK)
             }
         }
@@ -151,7 +151,7 @@ public class NodeNav(
         try {
             withContext(Dispatchers.Main) {
                 navNode = token.asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK) { completable.complete(Unit) }
-                updateNav(Transition.BEGIN_STACK, { false }) { navNode }
+                updateNav(Transition.PRESENT_STACK, { false }) { navNode }
             }
             completable.await()
         } catch (e: CancellationException) {
@@ -242,7 +242,7 @@ public class NodeNav(
         enum class Tag { CHILD, STACK, ROOT }
     }
 
-    internal enum class Transition { BEGIN_STACK, SIBLING, REPLACE, CLOSE_STACK, BACK }
+    internal enum class Transition { BEGIN_STACK, PRESENT_STACK, SIBLING, REPLACE, CLOSE_STACK, BACK }
 
     internal class ActivePanes(val foreground: Pane<*>, val background: Pane<*>?, val transition: Transition, val activeIds: List<NavNodeId>)
 
