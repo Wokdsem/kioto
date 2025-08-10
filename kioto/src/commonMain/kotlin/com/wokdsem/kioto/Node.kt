@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -176,11 +177,12 @@ public abstract class Node<S : Any> : ContextSupplier {
     protected fun <T> flowSubscribe(
         source: suspend () -> Flow<T>, onError: () -> Unit = EMPTY, onNext: T.() -> Unit
     ) {
+        fun postError() = run { if (scope.isActive) onError() }
         scope.launch {
             runCatching { withContext(context = Dispatchers.Default) { source() } }
                 .fold(
-                    onSuccess = { flow -> flow.flowOn(Dispatchers.IO).catch { onError() }.collect(onNext) },
-                    onFailure = { onError() }
+                    onSuccess = { flow -> flow.flowOn(Dispatchers.IO).catch { postError() }.collect(onNext) },
+                    onFailure = { postError() }
                 )
         }
     }
