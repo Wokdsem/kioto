@@ -31,20 +31,19 @@ import platform.UIKit.UIViewController
  * @param navigation The NodeNav instance that handles navigation actions.
  */
 public fun nodeHost(navigation: NodeNav): UIViewController {
+    val dragEvents = MutableSharedFlow<PredictiveBackEvents>(replay = 1, extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val bundle = HostBundle(
+        navigation = navigation,
+        platform = Platform.IOS,
+        backHandler = IosPredictiveBackHandler(events = dragEvents)
+    )
     return ComposeUIViewController {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val width = with(LocalDensity.current) { maxWidth.toPx() }
-            val threshold = width / 2
-            val dragEvents = MutableSharedFlow<PredictiveBackEvents>(replay = 1, extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-            NodeHost(
-                bundle = HostBundle(
-                    navigation = navigation,
-                    platform = Platform.IOS,
-                    backHandler = IosPredictiveBackHandler(events = dragEvents)
-                )
-            )
-            Box(modifier = Modifier.fillMaxHeight().width(16.dp).background(Color.Transparent).pointerInput(Unit) {
+            NodeHost(bundle = bundle)
+            Box(modifier = Modifier.fillMaxHeight().width(16.dp).background(Color.Transparent).pointerInput(width) {
                 var offset = 0f
+                val threshold = width / 2
                 detectDragGestures(
                     onDragStart = {
                         offset = 0f

@@ -78,8 +78,9 @@ internal fun NodeHost(bundle: HostBundle) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         var visiblePanes by remember { mutableStateOf<List<ActivePane>>(emptyList()) }
         val heldNodes = rememberSaveable { mutableListOf<String>() }
-        LaunchedEffect(bundle) {
+        LaunchedEffect(bundle, maxWidth) {
             val (nodeNav, platform, backHandler) = bundle
+            var firstActivePanesHandled = false
             var pastTransitionProgress = 1F
             nodeNav.activePanes.onEach { activePanes ->
                 if (heldNodes.isNotEmpty() && heldNodes.last() == activePanes.activeIds.lastOrNull()?.id) return@onEach
@@ -97,36 +98,38 @@ internal fun NodeHost(bundle: HostBundle) {
                 val backPressedToken = backHandler.takeUnless { platform == Platform.IOS || activePanes.background == null }
                     ?.register(callback = BackPressedCallback(activePanes.foreground.navBack))
                 try {
-                    withContext(Dispatchers.IO) {
-                        val noticeableBackward = visiblePanes.size == 2 && visiblePanes.first().id == target.id
-                        val (animator, duration, type, targetModifier, currentModifier) = when {
-                            noticeableBackward -> backwardAnimation(maxWidth, pastTransitionProgress)
-                            visiblePanes.size != 1 -> replaceAnimation()
-                            else -> when (activePanes.transition) {
-                                Transition.BEGIN_STACK, Transition.SIBLING -> forwardAnimation(maxWidth)
-                                Transition.CLOSE_STACK, Transition.BACK -> backwardAnimation(maxWidth)
-                                Transition.PRESENT_STACK, Transition.REPLACE, Transition.CLOSE_PRESENTED_STACK -> replaceAnimation()
+                    if (firstActivePanesHandled) {
+                        withContext(Dispatchers.IO) {
+                            val noticeableBackward = visiblePanes.size == 2 && visiblePanes.first().id == target.id
+                            val (animator, duration, type, targetModifier, currentModifier) = when {
+                                noticeableBackward -> backwardAnimation(maxWidth, pastTransitionProgress)
+                                visiblePanes.size != 1 -> replaceAnimation()
+                                else -> when (activePanes.transition) {
+                                    Transition.BEGIN_STACK, Transition.SIBLING -> forwardAnimation(maxWidth)
+                                    Transition.CLOSE_STACK, Transition.BACK -> backwardAnimation(maxWidth)
+                                    Transition.PRESENT_STACK, Transition.REPLACE, Transition.CLOSE_PRESENTED_STACK -> replaceAnimation()
+                                }
                             }
-                        }
-                        visiblePanes = when (type) {
-                            Type.FORWARD -> visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) } + ActivePane(target, targetModifier)
+                            visiblePanes = when (type) {
+                                Type.FORWARD -> visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) } + ActivePane(target, targetModifier)
 
-                            Type.REPLACE -> (visiblePanes.asSequence().filter { it.id != target.id }.map { it.copy(modifier = it.modifier then currentModifier) } +
-                                    ActivePane(target, targetModifier)).toList()
+                                Type.REPLACE -> (visiblePanes.asSequence().filter { it.id != target.id }.map { it.copy(modifier = it.modifier then currentModifier) } +
+                                        ActivePane(target, targetModifier)).toList()
 
-                            Type.BACKWARD -> when {
-                                noticeableBackward -> listOf(visiblePanes[0].copy(modifier = targetModifier), visiblePanes[1].copy(modifier = currentModifier))
-                                else -> {
-                                    when (val targetIndex = visiblePanes.indexOfFirst { it.id == target.id }) {
-                                        -1 -> listOf(ActivePane(target, targetModifier)) + visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) }
-                                        else -> visiblePanes.mapIndexed { index, pane -> pane.copy(modifier = if (targetIndex == index) targetModifier else pane.modifier then currentModifier) }
+                                Type.BACKWARD -> when {
+                                    noticeableBackward -> listOf(visiblePanes[0].copy(modifier = targetModifier), visiblePanes[1].copy(modifier = currentModifier))
+                                    else -> {
+                                        when (val targetIndex = visiblePanes.indexOfFirst { it.id == target.id }) {
+                                            -1 -> listOf(ActivePane(target, targetModifier)) + visiblePanes.map { it.copy(modifier = it.modifier then currentModifier) }
+                                            else -> visiblePanes.mapIndexed { index, pane -> pane.copy(modifier = if (targetIndex == index) targetModifier else pane.modifier then currentModifier) }
+                                        }
                                     }
                                 }
                             }
+                            runCatching {
+                                animator.animateTo(1F, animationSpec = tween(durationMillis = duration, easing = LinearEasing))
+                            }.onFailure { pastTransitionProgress = animator.value }.getOrThrow()
                         }
-                        runCatching {
-                            animator.animateTo(1F, animationSpec = tween(durationMillis = duration, easing = LinearEasing))
-                        }.onFailure { pastTransitionProgress = animator.value }.getOrThrow()
                     }
                 } catch (e: Throwable) {
                     backPressedToken?.release()
@@ -134,6 +137,7 @@ internal fun NodeHost(bundle: HostBundle) {
                 }
 
                 val targetPanes = listOf(ActivePane(pane = target, modifier = Modifier))
+                firstActivePanesHandled = true
                 visiblePanes = targetPanes
 
                 if (activePanes.background !is NodeNav.ActivePanes.BackgroundPane) pastTransitionProgress = 1F

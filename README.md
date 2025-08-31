@@ -419,7 +419,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.1.5")
+            implementation("com.wokdsem.kioto:kioto:0.2.1")
         }
     }
 }
