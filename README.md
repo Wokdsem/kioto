@@ -11,7 +11,7 @@ In the evolving landscape of Compose Multiplatform Mobile development, managing 
 Kioto addresses these challenges by offering a lightweight and opinionated solution designed to:
 
 * **Simplify Navigation** Define your application's UI as modular Node components, making navigation intuitive and easy to reason about.
-* **Promote Clear Architecture** Enforce a strict separation of concerns, leading to more maintainable and testable code.
+* **Promote Clean Architecture** Enforce a strict separation of concerns, leading to more maintainable and testable code.
 * **Ensure Multiplatform Consistency** Provide a unified navigation API that works seamlessly across Android and iOS, reducing platform-specific boilerplate.
 * **Enhance State Management** Leverage a robust state management system within each Node, ensuring predictable UI updates and a responsive user experience.
 
@@ -262,6 +262,7 @@ NodeNav runs regardless of the UI is rendering nodes or not, you just need to cr
 There's no limit on the number of `NodeNav` instances you can create, so it's up to you to determine the approach that works best for your application,
 you could have a single global reference to a `NodeNav` instance in your application file or use more elaborate solutions like dependency injection to manage it.
 For most applications, a single NodeNav instance at the application root is sufficient, but more advanced scenarios might benefit from multiple instances.
+If a `NodeNav` instance's lifecycle is shorter than app's lifecycle, it is necessary to call `release` to ensure proper cleanup of active nodes.
 
 ```kotlin
 val nodeNav = NodeNav().apply {
@@ -278,8 +279,7 @@ Sometimes you may find scenarios where you need your users to interact with the 
 Such as opening a push notification from the notifications center, a second factor authentication request, or a required pending terms acceptance that you discover during a login
 process.
 For these cases, you can leverage `presentStack` or `awaitPresentStack` to start a new stack with a node that will be presented to the user, allowing them to interact with it and
-then return to the previous
-navigation state.
+then return to the previous navigation state.
 
 * `presentStack` presents a new stack on top of any existing stacks.
 
@@ -290,7 +290,7 @@ fun presentDebitCardPaymentOperation(operationId: String) {
 }
 ```
 
-`awaitPresentStack` is a suspend function, coroutine execution is suspended until the presented stack is dismissed.
+`awaitPresentStack` is a suspend function, coroutine execution is suspended until the presented stack and its replacements, if any, are dismissed.
 
 ```kotlin
 suspend fun authenticate(authenticate: (code: String) -> Boolean) {
@@ -349,54 +349,61 @@ Context properties are identified by a `ProvidableContext` key. `Node`s uses thi
 val logger = contextKeyOf<Logger>() // Declare a context key for Logger
 
 val nodeNav = NodeNav(
-  context = context(
-    // Associate logger key to Logger supplier lambda, instances are created lazily and reused.
-    logger provides { Logger(::println) } 
-  )  
+    context = context(
+        // Associate logger key to Logger supplier lambda, instances are created lazily and reused.
+        logger provides { Logger(::println) }
+    )
 )
 
 class MovieAdvisor : Node<MovieAdvisor.State>() {
 
-  data class State(
-    val movie: Movie? = null
-  )
+    data class State(
+        val movie: Movie? = null
+    )
 
-  object Token : NodeToken {
-    override fun node() = node(::MovieAdvisor, ::State) {
-      MovieAdvisorView(object : MovieAdvisorView.ViewListener {
-        override fun onSeeMore(movie: Movie) = seeMore(movie)
-      })
+    object Token : NodeToken {
+        override fun node() = node(::MovieAdvisor, ::State) {
+            MovieAdvisorView(object : MovieAdvisorView.ViewListener {
+                override fun onSeeMore(movie: Movie) = seeMore(movie)
+            })
+        }
     }
-  }
 
-  init {
-    subscribe(::suggestMovie) { updateState { state.copy(movie = this) } }
-  }
-
-  private fun seeMore(movie: Movie) {
-    nav.navigate { MovieDetail.Token(movie) }.also {
-      // Retrieve the context property by invoking () the key  
-      logger().log("See more about ${movie.title}") 
+    init {
+        subscribe(::suggestMovie) { updateState { state.copy(movie = this) } }
     }
-  }
+
+    private fun seeMore(movie: Movie) {
+        nav.navigate { MovieDetail.Token(movie) }.also {
+            // Retrieve the context property by invoking () the key  
+            logger().log("See more about ${movie.title}")
+        }
+    }
 
 }
 
 fun interface Logger {
-  fun log(message: String)
+    fun log(message: String)
 }
 ```
 
-#### Root parent supplier
+#### Dismissing a root node
 
-When instantiating a `NodeNav`, you can provide a `rootParentSupplier` that will be used to determine the parent of the root node.
-Sometimes you may start a navigation from a node that is not the usual root node, for example, when opening the app from a notification or a deep link and you want your users
-to go through a specific node after leaving the app, for example, a home or dashboard node.
+Once a `NodeNav` is initialized by adding a first node, aka root node, it cannot be emptied anymore. Any attempt to empty the navigation by dismissing its root node has no effect.
+
+However, it's common you may start a navigation from a node that is not the usual root node, for example, when opening the app from a notification or a deep link and you may want
+your users to be directed to a specific node after leaving the app, for example, a home or dashboard node. To deal with these situations, provide a `handleRootDismissTry` lambda
+when instantiating `NodeNav`. `handleRootDismissTry` is called everytime a new root node is set. This lambda should return another lambda which will be invoked if an attempt is
+made to dismiss that root node, allowing you to define the desired behavior.
+
 
 ```kotlin
-internal val nodeNav = NodeNav { token ->
-    // Any node other than Demo will have Demo as its parent.
-    if (token != Demo.Token) Demo.Token else null
+val nodeNav = NodeNav(
+    context = context(logger provides { Logger(::println) })
+) { rootToken ->
+    // Any attempt to dismiss a root node other than Demo, will take users to Demo node by setting a new navigation. 
+    // Having this way Demo as the only exit point for the application.
+    if (rootToken != Demo.Token) return@NodeNav { setNavigation { Demo.Token } } else null
 }.apply {
     // Initialize the navigation with the first node.
     setNavigation { Demo.Token }
@@ -417,6 +424,7 @@ kotlin {
     }
 }
 ```
+
 Available on [Maven Central](https://central.sonatype.com/artifact/com.wokdsem.kioto/kioto)
 
 ### Android

@@ -12,18 +12,13 @@ import androidx.compose.runtime.Composable
  * @see NodeNav
  *
  * @param navigation The NodeNav instance that handles navigation actions.
- * @param onStackCleared A lambda that returns a fallback [NodeToken] to be navigated to in the event the [NodeNav] is fully cleared.
  */
 @Composable
-public fun NodeHost(
-    navigation: NodeNav,
-    onStackCleared: () -> NodeToken,
-) {
+public fun NodeHost(navigation: NodeNav) {
     val compactActivity = LocalActivity.current as? AppCompatActivity ?: throw IllegalStateException("NodeHost must be used within an AppCompatActivity context")
     NodeHost(
         bundle = HostBundle(
             navigation = navigation,
-            onStackCleared = { navigation.setNavigation(onStackCleared) },
             platform = Platform.ANDROID,
             backHandler = AndroidPredictiveBackHandler(compactActivity)
         )

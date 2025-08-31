@@ -5,7 +5,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import com.wokdsem.kioto.NodeHost
-import com.wokdsem.kioto.example.features.demo.Demo
 
 class MainActivity : AppCompatActivity() {
 
@@ -13,7 +12,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            NodeHost(navigation = nodeNav, onStackCleared = { Demo.Token })
+            NodeHost(navigation = nodeNav)
         }
     }
 

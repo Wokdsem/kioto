@@ -9,6 +9,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.ExperimentalUuidApi
@@ -17,16 +18,21 @@ import kotlin.uuid.Uuid
 /**
  * [NodeNav] manages navigation among Nodes.
  * Navigation is in essence a data structure based on stacking stacks of [Node]. In this context,
- * a stack is a logical association among nodes. Because of this association, node groups can be popped or replaced
- * altogether at once.
+ * a stack is a logical association among nodes. Because of this association, node groups can be popped or replaced altogether at once.
  *
  * @see Node.Navigator
  *
- * Navigation is started by calling [NodeNav.setNavigation]. If a navigation was previously initiated,
- * the old navigation will be cleared and a new one started.
- * The node starting the navigation is known as the root node. A root node cannot share its stack with any other node, so any
- * navigation initiated from a root node will create a new stack.
+ * Navigation is started by calling [NodeNav.setNavigation].
+ * If a navigation was previously initiated, the old navigation will be cleared and a new one started.
  *
+ * The node starting the navigation is known as the root node.
+ * A root node is treated as an special node since it's not allowed to share its stack with any other nodes. Thus, any navigation initiated from a root node will create a new stack.
+ *
+ * Once a [NodeNav] is initialized by adding a first node, aka root node, this cannot be emptied anymore. Any attempt to empty the navigation by dismissing its root node is
+ * effectless. However, if a [handleRootDismissTry] lambda was provided when instantiating [NodeNav], you will be given the chance to handle the attempt to dismiss the root node.
+ * Since predictive back navigation is at the core of this navigation solution, beware that this lambda might be called right after setting the navigation.
+ *
+ * If a [NodeNav] instance's lifecycle is shorter than app's lifecycle, it is necessary to call [release] to ensure proper cleanup of active nodes.
  *
  * [NodeNav] has an associated [NodeContext] that provides context to the nodes hosted by the [NodeNav] instance.
  * [Node] can leverage the context to access dependencies, retrieve scoped configurations, or any other helpful operation that this flexible approach allows.
@@ -36,30 +42,24 @@ import kotlin.uuid.Uuid
  * @see ProvidableContext
  *
  *
- * If a ([NodeToken]) -> [NodeToken]? is provided when instantiating [NodeNav], this lambda will be executed to determine
- * the parent node of a root node. The parent node of a root node is also treated as a root node, meaning it will create its own independent
- * stack at the beginning of the navigation.
- * Since predictive back navigation is at the core of this navigation solution, this might be called right after setting the navigation.
- *
- * The parent node of a root node is also treated as a root node, meaning it will create its own independent
- * stack at the beginning of the navigation history and cannot share its stack with other nodes added at that level.
- *
  * @param context - A [NodeContext] that provides context to the nodes hosted by the [NodeNav] instance.
- * @param rootParentSupplier - A lambda that receives the root [NodeToken] and returns an optional [NodeToken] identifying the parent node of the root node.
+ * @param handleRootDismissTry - A lambda that receives the root [NodeToken] and returns an optional lambda to be invoked if the root node was attempted to be dismissed.
  */
 @OptIn(ExperimentalUuidApi::class)
 public class NodeNav(
     context: NodeContext = context(),
-    private val rootParentSupplier: (NodeToken) -> NodeToken? = { null }
+    private val handleRootDismissTry: (NodeNav.(rootToken: NodeToken) -> (() -> Unit)?)? = null,
 ) {
 
     private val contextSupplier = context.asContextSupplier()
     private val stack: ArrayDeque<NavNode> = ArrayDeque()
-    private var actualRootLoaded: Boolean = false
+    private val presentedStackRecords: ArrayDeque<PresentedStackRecord> = ArrayDeque()
+    private var onRootDismissTry: (() -> Unit)? = null
+    private var released: Boolean = false
 
     private val navActivePanes: MutableStateFlow<ActivePanes?> = MutableStateFlow(value = null)
 
-    internal val activePanes: Flow<ActivePanes?> get() = navActivePanes
+    internal val activePanes: Flow<ActivePanes> get() = navActivePanes.filterNotNull()
 
     /**
      * If any, pops all the stacks and their nodes, and starts a new navigation stack with the specified root node.
@@ -68,42 +68,83 @@ public class NodeNav(
      */
     public fun setNavigation(rootNode: () -> NodeToken) {
         runOnUiThread {
-            updateNav(transition = Transition.REPLACE, release = { true }) {
+            updateNav(type = NavigationType.REPLACE, release = { true }) {
                 rootNode().asNavNode(tag = Tag.ROOT)
             }
         }
     }
 
-    private inline fun updateNav(transition: Transition, release: (NavNode) -> Boolean, navigation: () -> NavNode?) {
-        while (stack.isNotEmpty() && release(stack.last())) {
-            stack.removeLast().run {
-                navigator.invalidate()
-                onDestroy?.invoke()
-                this.node.destroy()
+    /**
+     * Releases any active nodes and prevents any further navigation.
+     * If the [NodeNav] instance's lifecycle is shorter than app's lifecycle, you must call this method to ensure proper cleanup.
+     */
+    public fun release() {
+        runOnUiThread {
+            if (released) return@runOnUiThread
+            for (index in stack.indices.reversed()) {
+                stack[index].release()
+                if (presentedStackRecords.lastOrNull()?.stackIndex == index) presentedStackRecords.removeLast().completable?.complete(Unit)
             }
-        }
-        if (stack.isEmpty()) actualRootLoaded = false
-
-        navigation()?.let { stack += it }
-        if (stack.size < 2 && !actualRootLoaded) {
-            val rootFeat = if (stack.isNotEmpty()) rootParentSupplier(stack.first().token) else null
-            if (rootFeat != null) {
-                stack.addFirst(element = rootFeat.asNavNode(tag = Tag.ROOT))
-                actualRootLoaded = true
-            }
-        }
-        navActivePanes.value = when (stack.size) {
-            0 -> null
-            1 -> ActivePanes(foreground = stack.last().asPane(), background = null, transition = transition, activeIds = stack)
-            else -> ActivePanes(foreground = stack.last().asPane(), background = stack[stack.lastIndex - 1].asPane(), transition = transition, activeIds = stack)
+            released = true
         }
     }
 
-    private fun NodeToken.asNavNode(tag: Tag, onDestroy: (() -> Unit)? = null): NavNode {
+    private inline fun updateNav(type: NavigationType, release: (NavNode) -> Boolean, navigation: () -> NavNode?) {
+        if (released) return
+
+        val startingStackSize = stack.size
+        var lastRemovedNode: NavNode? = null
+        var lastPresentedStackRecordIndex: Int? = null
+        while (stack.isNotEmpty() && release(stack.last())) {
+            if (stack.size == 1 && type == NavigationType.POP) return onRootDismissTry?.invoke() ?: Unit
+            if (type == NavigationType.REPLACE) lastPresentedStackRecordIndex = evaluatePresentedStack()
+            lastRemovedNode = stack.removeLast().also(NavNode::release)
+            if (type != NavigationType.REPLACE) lastPresentedStackRecordIndex = evaluatePresentedStack()
+        }
+
+        val navigationNode = navigation()?.also { node ->
+            if (stack.isEmpty()) onRootDismissTry = handleRootDismissTry?.invoke(this, node.token)
+            stack += node
+        }
+
+        val transition = when {
+            startingStackSize == 0 || type == NavigationType.REPLACE -> Transition.REPLACE
+            stack.size > startingStackSize -> when {
+                navigationNode?.tag == Tag.CHILD -> Transition.SIBLING
+                presentedStackRecords.lastOrNull()?.stackIndex == stack.lastIndex -> Transition.PRESENT_STACK
+                else -> Transition.BEGIN_STACK
+            }
+
+            stack.size < startingStackSize -> when {
+                type != NavigationType.POP -> Transition.REPLACE
+                lastRemovedNode?.tag == Tag.CHILD -> Transition.BACK
+                lastPresentedStackRecordIndex == stack.size -> Transition.CLOSE_PRESENTED_STACK
+                else -> Transition.CLOSE_STACK
+            }
+
+            else -> Transition.REPLACE
+        }
+
+        val background = when (stack.size) {
+            0 -> error("Unreachable state: stack cannot be empty")
+            1 -> if (onRootDismissTry == null) null else ActivePanes.HandledBackground
+            else -> ActivePanes.BackgroundPane(stack[stack.lastIndex - 1].asPane(), presentedStackRecords.lastOrNull()?.stackIndex == stack.lastIndex)
+        }
+        navActivePanes.value = ActivePanes(foreground = stack.last().asPane(), background = background, transition = transition, activeIds = stack)
+    }
+
+    private fun evaluatePresentedStack(): Int? {
+        if (presentedStackRecords.lastOrNull()?.stackIndex != stack.size) return null
+        val stackRecord = presentedStackRecords.removeLast()
+        stackRecord.completable?.complete(Unit)
+        return stackRecord.stackIndex
+    }
+
+    private fun NodeToken.asNavNode(tag: Tag): NavNode {
         val id = Uuid.random().toString()
         val navigator = NodeNavigator(id)
         val node = buildNode(token = node().token, navigator = navigator)
-        return NavNode(id = id, tag = tag, token = this, navigator = navigator, node = node, onDestroy = onDestroy)
+        return NavNode(id = id, tag = tag, token = this, navigator = navigator, node = node)
     }
 
     private fun <F : Node<S>, S : Any> buildNode(token: Token<F, S>, navigator: Navigator): Node<S> {
@@ -131,33 +172,36 @@ public class NodeNav(
      * @param stackRootNode - A lambda that returns a [NodeToken] representing the root node of the new stack to be presented.
      */
     public fun presentStack(stackRootNode: () -> NodeToken) {
-        runOnUiThread {
-            updateNav(Transition.PRESENT_STACK, { false }) {
-                stackRootNode().asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK)
-            }
-        }
+        runOnUiThread { presentStack(stackRootNode, null) }
     }
 
     /**
-     * Starts a new stack on top of any existing stacks containing the node returned by the [stackRootNode] lambda and suspends the execution until that presented node is
-     * removed from the navigation stack.
+     * Starts a new stack on top of any existing stacks containing the node returned by the [stackRootNode] lambda and suspends the execution until that presented node and
+     * its subsequent replacements, if any, are removed from the navigation stack.
      *
      * @param stackRootNode - A lambda that returns a [NodeToken] representing the node to be presented.
      */
     public suspend fun awaitPresentStack(stackRootNode: () -> NodeToken) {
         val completable = CompletableDeferred<Unit>()
-        val token = stackRootNode()
-        var navNode: NavNode? = null
+        var stackIndex: Int? = null
         try {
-            withContext(Dispatchers.Main) {
-                navNode = token.asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK) { completable.complete(Unit) }
-                updateNav(Transition.PRESENT_STACK, { false }) { navNode }
-            }
+            withContext(Dispatchers.Main) { stackIndex = presentStack(stackRootNode, completable) }
             completable.await()
         } catch (e: CancellationException) {
-            withContext(NonCancellable + Dispatchers.Main) { navNode?.navigator?.navigateUp() }
+            withContext(NonCancellable + Dispatchers.Main) {
+                if (stackIndex != null) updateNav(type = NavigationType.POP, release = { stack.size > stackIndex }, navigation = { null })
+            }
             throw e
         }
+    }
+
+    private fun presentStack(stackRootNode: () -> NodeToken, completable: CompletableDeferred<Unit>?): Int {
+        val stackIndex = stack.size
+        presentedStackRecords += PresentedStackRecord(stackIndex, completable)
+        updateNav(type = NavigationType.PUSH, { false }) {
+            stackRootNode().asNavNode(tag = if (stack.isEmpty()) Tag.ROOT else Tag.STACK)
+        }
+        return stackIndex
     }
 
     private inner class NodeNavigator(
@@ -167,17 +211,17 @@ public class NodeNav(
         private var released = false
 
         override fun navigate(node: () -> NodeToken) {
-            runNavigation(Transition.SIBLING, release = { false }) { node().asNavNode(tag = if (stack.last().tag == Tag.ROOT) Tag.STACK else Tag.CHILD) }
+            runNavigation(NavigationType.PUSH, release = { false }) { node().asNavNode(tag = if (stack.last().tag == Tag.ROOT) Tag.STACK else Tag.CHILD) }
         }
 
         override fun beginStack(stackRootNode: () -> NodeToken) {
-            runNavigation(Transition.BEGIN_STACK, release = { false }) { stackRootNode().asNavNode(Tag.STACK) }
+            runNavigation(NavigationType.PUSH, release = { false }) { stackRootNode().asNavNode(Tag.STACK) }
         }
 
         override fun replace(node: () -> NodeToken) {
             var replacedTag: Tag? = null
             runNavigation(
-                transition = Transition.REPLACE,
+                type = NavigationType.REPLACE,
                 release = { node -> (replacedTag == null || replacedTag == Tag.ROOT).also { replacedTag = node.tag } },
                 navigation = { node().asNavNode(tag = checkNotNull(replacedTag)) }
             )
@@ -186,7 +230,7 @@ public class NodeNav(
         override fun replaceStack(stackRootNode: () -> NodeToken) {
             var replacedTag: Tag? = null
             runNavigation(
-                transition = Transition.REPLACE,
+                type = NavigationType.REPLACE,
                 release = { node -> (replacedTag != Tag.STACK).also { replacedTag = node.tag } },
                 navigation = { stackRootNode().asNavNode(tag = Tag.STACK) }
             )
@@ -194,25 +238,25 @@ public class NodeNav(
 
         override fun navigateBack() {
             var backRun = false
-            runNavigation(Transition.BACK, release = { !backRun.also { backRun = true } })
+            runNavigation(NavigationType.POP, release = { !backRun.also { backRun = true } })
         }
 
         override fun navigateUp() {
             var upRun = false
-            runNavigation(Transition.CLOSE_STACK, release = { node -> !upRun.also { upRun = node.tag != Tag.CHILD } })
+            runNavigation(NavigationType.POP, release = { node -> !upRun.also { upRun = node.tag != Tag.CHILD } })
         }
 
         override fun popToRoot() {
             var onRoot = false
-            runNavigation(Transition.CLOSE_STACK, release = { node -> (node.tag != Tag.ROOT || !onRoot).also { onRoot = true } })
+            runNavigation(NavigationType.POP, release = { node -> (node.tag != Tag.ROOT || !onRoot).also { onRoot = true } })
         }
 
-        private inline fun runNavigation(transition: Transition, release: (NavNode) -> Boolean, navigation: () -> NavNode? = { null }) {
+        private inline fun runNavigation(type: NavigationType, release: (NavNode) -> Boolean, navigation: () -> NavNode? = { null }) {
             runOnUiThread {
                 if (released) return@runOnUiThread
                 var originAchieved = false
                 updateNav(
-                    transition = transition,
+                    type = type,
                     release = {
                         if (!originAchieved && it.id == id) originAchieved = true
                         !originAchieved || release(it)
@@ -237,14 +281,25 @@ public class NodeNav(
         val token: NodeToken,
         val node: Node<*>,
         val navigator: NodeNavigator,
-        val onDestroy: (() -> Unit)?
     ) : NavNodeId(id) {
         enum class Tag { CHILD, STACK, ROOT }
+
+        fun release() {
+            navigator.invalidate()
+            node.destroy()
+        }
     }
 
-    internal enum class Transition { BEGIN_STACK, PRESENT_STACK, SIBLING, REPLACE, CLOSE_STACK, BACK }
+    private enum class NavigationType { PUSH, REPLACE, POP }
+    private class PresentedStackRecord(val stackIndex: Int, val completable: CompletableDeferred<Unit>?)
 
-    internal class ActivePanes(val foreground: Pane<*>, val background: Pane<*>?, val transition: Transition, val activeIds: List<NavNodeId>)
+    internal enum class Transition { BEGIN_STACK, PRESENT_STACK, SIBLING, REPLACE, CLOSE_STACK, CLOSE_PRESENTED_STACK, BACK }
+
+    internal class ActivePanes(val foreground: Pane<*>, val background: Background?, val transition: Transition, val activeIds: List<NavNodeId>) {
+        sealed interface Background
+        class BackgroundPane(val backgroundPane: Pane<*>, val presented: Boolean) : Background
+        object HandledBackground : Background
+    }
 
     internal class Pane<S : Any>(
         val id: PaneId,

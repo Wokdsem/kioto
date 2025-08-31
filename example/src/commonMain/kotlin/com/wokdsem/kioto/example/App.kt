@@ -14,9 +14,10 @@ import com.wokdsem.kioto.provides
  */
 internal val nodeNav = NodeNav(
     context = context(logger provides { Logger(::println) })
-) { token ->
-    // Any node other than Demo will have Demo as its parent.
-    if (token != Demo.Token) Demo.Token else null
+) { rootToken ->
+    // Any attempt to dismiss a root node other than Demo, will take users to Demo node by setting a new navigation.
+    // Having this way Demo as the only exit point for the application.
+    if (rootToken != Demo.Token) return@NodeNav { setNavigation { Demo.Token } } else null
 }.apply {
     // Initialize the navigation with the first node.
     setNavigation { Demo.Token }

@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.2.0"
+kotlin = "2.2.10"
 compose-multiplatform = "1.8.2"
 jvm = "21"
 agp = "8.11.1"
