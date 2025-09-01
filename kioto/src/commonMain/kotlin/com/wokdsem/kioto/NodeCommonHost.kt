@@ -88,7 +88,7 @@ internal fun NodeHost(bundle: HostBundle) {
                     Transition.BEGIN_STACK, Transition.PRESENT_STACK, Transition.SIBLING, Transition.REPLACE -> activePanes.activeIds.getOrNull(activePanes.activeIds.lastIndex - 1)
                     Transition.CLOSE_STACK, Transition.CLOSE_PRESENTED_STACK, Transition.BACK -> activePanes.activeIds.lastOrNull()
                 }?.id
-                while (heldNodes.isNotEmpty() && heldNodes.last() != refId) heldNodes.removeLast().let(stateHolder::removeState)
+                while (heldNodes.isNotEmpty() && heldNodes.last() != refId) heldNodes.removeAt(heldNodes.lastIndex).let(stateHolder::removeState)
                 if (activePanes.transition.run { this == Transition.BEGIN_STACK || this == Transition.PRESENT_STACK || this == Transition.SIBLING || this == Transition.REPLACE }) {
                     if (heldNodes.isEmpty() && activePanes.activeIds.size == 2) heldNodes += activePanes.activeIds.first().id
                     heldNodes += activePanes.activeIds.last().id
