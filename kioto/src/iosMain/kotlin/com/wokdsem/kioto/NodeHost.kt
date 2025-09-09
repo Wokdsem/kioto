@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,19 +29,23 @@ import platform.UIKit.UIViewController
  *
  * @see NodeNav
  *
- * @param navigation The NodeNav instance that handles navigation actions.
+ * @param nodeNav The NodeNav instance that handles navigation actions.
+ * @param wrapper A composable function that wraps the NodeHost. It receives a `nodeHost` lambda parameter which *must* be called to render the actual navigation content.
  */
-public fun nodeHost(navigation: NodeNav): UIViewController {
+public fun nodeHost(
+    nodeNav: NodeNav,
+    wrapper: @Composable (nodeHost: @Composable () -> Unit) -> Unit = { nodeHost -> nodeHost() }
+): UIViewController {
     val dragEvents = MutableSharedFlow<PredictiveBackEvents>(replay = 1, extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val bundle = HostBundle(
-        navigation = navigation,
+        nodeNav = nodeNav,
         platform = Platform.IOS,
         backHandler = IosPredictiveBackHandler(events = dragEvents)
     )
     return ComposeUIViewController {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val width = with(LocalDensity.current) { maxWidth.toPx() }
-            NodeHost(bundle = bundle)
+            wrapper { NodeHost(bundle = bundle) }
             Box(modifier = Modifier.fillMaxHeight().width(16.dp).background(Color.Transparent).pointerInput(width) {
                 var offset = 0f
                 val threshold = width / 2

@@ -4,6 +4,6 @@ import com.wokdsem.kioto.nodeHost
 
 object ExampleIOsApplication {
 
-    fun getNodeNavUIViewController() = nodeHost(navigation = nodeNav)
+    fun getNodeNavUIViewController() = nodeHost(nodeNav = nodeNav)
 
 }

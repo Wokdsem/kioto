@@ -419,7 +419,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.2.1")
+            implementation("com.wokdsem.kioto:kioto:0.2.3")
         }
     }
 }
@@ -439,8 +439,7 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContent {
             NodeHost(
-                navigation = nodeNav, // The NodeNav instance to be rendered 
-                onStackCleared = { Demo.Token } // A fallback node to be shown in case the stack is cleared
+                nodeNav = nodeNav // The NodeNav instance to be rendered 
             )
         }
     }
@@ -450,14 +449,14 @@ class MainActivity : AppCompatActivity() {
 
 ### iOS
 
-Use `nodeHost` function which returns a `UIViewController` to render a `NodeNav` instance in your iOS application.
+Use `nodeHost` function which returns a `UIViewController` to render a `NodeNav` instance in your iOS application. 
+Override the default composable nodeHost wrapper if you need to customize the nodeHost holder.   
 
 ```kotlin
 object ExampleIOsApplication {
 
     fun getNodeNavUIViewController() = nodeHost(
-        navigation = nodeNav, // The NodeNav instance to be rendered
-        onStackCleared = { Demo.Token } // A fallback node to be shown in case the stack is cleared
+        nodeNav = nodeNav // The NodeNav instance to be rendered
     )
 
 }

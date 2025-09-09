@@ -12,7 +12,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            NodeHost(navigation = nodeNav)
+            NodeHost(nodeNav = nodeNav)
         }
     }
 

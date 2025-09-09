@@ -11,14 +11,14 @@ import androidx.compose.runtime.Composable
  *
  * @see NodeNav
  *
- * @param navigation The NodeNav instance that handles navigation actions.
+ * @param nodeNav The NodeNav instance that handles navigation actions.
  */
 @Composable
-public fun NodeHost(navigation: NodeNav) {
+public fun NodeHost(nodeNav: NodeNav) {
     val compactActivity = LocalActivity.current as? AppCompatActivity ?: throw IllegalStateException("NodeHost must be used within an AppCompatActivity context")
     NodeHost(
         bundle = HostBundle(
-            navigation = navigation,
+            nodeNav = nodeNav,
             platform = Platform.ANDROID,
             backHandler = AndroidPredictiveBackHandler(compactActivity)
         )

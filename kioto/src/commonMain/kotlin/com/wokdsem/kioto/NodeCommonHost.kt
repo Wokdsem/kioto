@@ -51,7 +51,7 @@ private const val FACTOR_TRANSLATION = 0.3F
 private val LocalStateHolder = staticCompositionLocalOf<SaveableStateHolder> { error("Missing state holder") }
 
 internal data class HostBundle(
-    val navigation: NodeNav,
+    val nodeNav: NodeNav,
     val platform: Platform,
     val backHandler: BackHandler
 )
