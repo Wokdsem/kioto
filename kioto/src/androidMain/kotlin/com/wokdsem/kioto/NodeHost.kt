@@ -5,6 +5,11 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalActivity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
+import com.wokdsem.kioto.engine.BackHandler
+import com.wokdsem.kioto.engine.HostBundle
+import com.wokdsem.kioto.engine.NodeHost
+import com.wokdsem.kioto.engine.NodeNavRunner
+import com.wokdsem.kioto.engine.Releasable
 
 /**
  * A composable function that renders the state of a [NodeNav].
@@ -18,7 +23,7 @@ public fun NodeHost(nodeNav: NodeNav) {
     val compactActivity = LocalActivity.current as? AppCompatActivity ?: throw IllegalStateException("NodeHost must be used within an AppCompatActivity context")
     NodeHost(
         bundle = HostBundle(
-            nodeNav = nodeNav,
+            nodeNav = nodeNav as NodeNavRunner,
             platform = Platform.ANDROID,
             backHandler = AndroidPredictiveBackHandler(compactActivity)
         )
@@ -33,8 +38,6 @@ private class AndroidPredictiveBackHandler(private val activity: AppCompatActivi
             override fun handleOnBackPressed() = callback.onBackPressed()
             override fun handleOnBackCancelled() = callback.onBackCancelled()
         }.also(activity.onBackPressedDispatcher::addCallback)
-        return object : Releasable {
-            override fun release() = backPressedCallback.remove()
-        }
+        return Releasable { backPressedCallback.remove() }
     }
 }

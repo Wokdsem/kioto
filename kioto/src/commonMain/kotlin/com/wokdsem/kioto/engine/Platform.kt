@@ -1,4 +1,4 @@
-package com.wokdsem.kioto
+package com.wokdsem.kioto.engine
 
 internal inline fun <T> runOnUiThread(action: () -> T): T {
     checkOnUiThread()

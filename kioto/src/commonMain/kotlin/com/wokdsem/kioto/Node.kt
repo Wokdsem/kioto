@@ -2,14 +2,12 @@ package com.wokdsem.kioto
 
 import androidx.compose.runtime.Composable
 import com.wokdsem.kioto.Node.Companion.node
+import com.wokdsem.kioto.engine.ContextSupplier
+import com.wokdsem.kioto.engine.NodeHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -17,8 +15,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal class Token<N : Node<S>, S : Any>(
-    val node: () -> Node<S>, val state: () -> S, val view: N.() -> NodeView<S>
+internal class NodeSpec<N : Node<S>, S : Any>(
+    val node: () -> N, val state: () -> S, val view: N.() -> NodeView<S>
 )
 
 /**
@@ -36,12 +34,12 @@ public interface NodeToken {
      * NodeToken holder.
      */
     public class Node internal constructor(
-        internal val token: Token<*, *>
+        internal val spec: NodeSpec<*, *>
     )
 }
 
 /**
- * Node UI supplier for [com.wokdsem.kioto.Node]. A new instance of [NodeView] is created when a [Node] is or becoming at the top of the stack and
+ * Node UI supplier for [Node]. A new instance of [NodeView] is created when a [Node] is or becoming at the top of the stack and
  * destroyed at any other situation.
  *
  * @param S The type of the state that the node holds.
@@ -82,7 +80,6 @@ public abstract class Node<S : Any> : ContextSupplier {
 
     public companion object {
 
-        internal val bundle: NodeHolder<Bundle<*, *>> = NodeHolder()
         private val EMPTY = { }
 
         /**
@@ -96,56 +93,38 @@ public abstract class Node<S : Any> : ContextSupplier {
          */
         public fun <N : Node<S>, S : Any> node(
             node: () -> N, initialState: () -> S, view: N.() -> NodeView<S>
-        ): NodeToken.Node = NodeToken.Node(token = Token(node, initialState, view))
-
-        internal class Bundle<N : Node<S>, S : Any>(val state: () -> S, val view: N.() -> NodeView<S>, val contextSupplier: ContextSupplier, val navigator: Navigator)
-
-        internal class NodeHolder<T> {
-            private var holder: T? = null
-            val value get() = runOnUiThread { checkNotNull(holder) { "Illegal manual node instantiation." } }
-            fun <R> hold(value: T, action: () -> R): R {
-                holder = value
-                return action().also { holder = null }
-            }
-        }
+        ): NodeToken.Node = NodeToken.Node(spec = NodeSpec(node, initialState, view))
 
     }
-
-    internal var viewBuilder: () -> NodeView<S> private set
-    internal val nodeState: StateFlow<S> get() = nodeMutableState
 
     /**
      * @return the current state of the node.
      *
      * It must be called from the UI thread, otherwise an [IllegalStateException] will be thrown.
      */
-    protected val state: S get() = runOnUiThread { nodeMutableState.value }
+    protected val state: S get() = nodeState()
 
     /**
-     * @return the node navigator.
+     * @return the node navigator. Hosted nodes inherit navigator from their host node.
      */
     protected val nav: Navigator
 
-    private val nodeMutableState: MutableStateFlow<S>
+    private val nodeState: () -> S
+    private val updateState: (S) -> Unit
+    private val host: (Array<out NodeToken>) -> Unit
     private val contextSupplier: ContextSupplier
-    private val scope: CoroutineScope = CoroutineScope(context = SupervisorJob() + Dispatchers.Main.immediate)
-    private var cleared: Boolean = false
+    private val scope: CoroutineScope
 
     init {
         @Suppress("UNCHECKED_CAST")
-        (bundle.value as Bundle<Node<S>, S>).run {
-            val view: Node<S>.() -> NodeView<S> = view
+        ((NodeHolder.value ?: error("Illegal node instantiation")) as NodeHolder.Bundle<S>).run {
             this@Node.nav = navigator
+            this@Node.nodeState = state
+            this@Node.host = host
+            this@Node.updateState = updateState
             this@Node.contextSupplier = contextSupplier
-            this@Node.nodeMutableState = MutableStateFlow(value = state())
-            this@Node.viewBuilder = { this@Node.view() }
+            this@Node.scope = scope
         }
-    }
-
-    internal fun destroy() {
-        cleared = true
-        scope.cancel()
-        onCleared()
     }
 
     override fun <T> ProvidableContext<T>.invoke(): T {
@@ -188,6 +167,24 @@ public abstract class Node<S : Any> : ContextSupplier {
     }
 
     /**
+     * Establishes this node as a parent for the specified child [nodes], allowing to create a hierarchical structure of nodes
+     * where this node (the host) manages the lifecycle and navigation context of its children (hosted nodes).
+     * A hosted node can in turn hosts its own children nodes.
+     *
+     * Key characteristics of hosted nodes:
+     * - **Inherited Navigator:** Hosted nodes automatically inherit the [Navigator] instance from their host node.
+     *   This means any navigation operations initiated from a hosted node will be forwarded to the host node.
+     * - **Lifecycle Management:** Hosted nodes are automatically cleared when their host node is cleared.
+     *
+     * Calling [host] again will clear any previously hosted nodes and establish the new set of [nodes] as the children of this host.
+     *
+     * @param nodes A variable number of [NodeToken] instances representing the child nodes to be hosted.
+     */
+    protected fun host(vararg nodes: NodeToken) {
+        host(nodes)
+    }
+
+    /**
      * Performs any cleanup actions when the node is cleared.
      */
     protected open fun onCleared(): Unit = Unit
@@ -200,10 +197,11 @@ public abstract class Node<S : Any> : ContextSupplier {
      * @param update A lambda function that returns the new state for the node.
      */
     protected fun updateState(update: () -> S) {
-        runOnUiThread {
-            check(!cleared) { "Illegal update action on a cleared node" }
-            nodeMutableState.value = update()
-        }
+        updateState(update())
+    }
+
+    internal fun clear() {
+        onCleared()
     }
 
     /**

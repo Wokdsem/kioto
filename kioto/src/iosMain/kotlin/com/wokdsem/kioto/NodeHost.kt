@@ -14,6 +14,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeUIViewController
+import com.wokdsem.kioto.engine.BackHandler
+import com.wokdsem.kioto.engine.HostBundle
+import com.wokdsem.kioto.engine.NodeHost
+import com.wokdsem.kioto.engine.NodeNavRunner
+import com.wokdsem.kioto.engine.Releasable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
@@ -38,7 +43,7 @@ public fun nodeHost(
 ): UIViewController {
     val dragEvents = MutableSharedFlow<PredictiveBackEvents>(replay = 1, extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val bundle = HostBundle(
-        nodeNav = nodeNav,
+        nodeNav = nodeNav as NodeNavRunner,
         platform = Platform.IOS,
         backHandler = IosPredictiveBackHandler(events = dragEvents)
     )

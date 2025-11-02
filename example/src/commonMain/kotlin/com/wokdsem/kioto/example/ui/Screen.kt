@@ -19,33 +19,37 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.wokdsem.kioto.LocalNodeNavigation
+import com.wokdsem.kioto.LocalNodeScope
 import com.wokdsem.kioto.example.ui.Screen.Navigation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Screen(
-    title: String,
+    title: String? = null,
     navigation: Navigation = Navigation.NONE,
+    scrollable: Boolean = true,
     content: @Composable () -> Unit
 ) {
     Surface {
         Column(modifier = Modifier.fillMaxSize().imePadding().statusBarsPadding()) {
-            val nodeNavigation = LocalNodeNavigation.current
-            CenterAlignedTopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    when (navigation) {
-                        Navigation.BACK -> IconButton(onClick = { nodeNavigation?.navigateBack() }) {
-                            Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
-                        }
+            val nodeScope = LocalNodeScope.current
+            if (title != null || navigation != Navigation.NONE) {
+                CenterAlignedTopAppBar(
+                    title = { if (title != null) Text(title) },
+                    navigationIcon = {
+                        when (navigation) {
+                            Navigation.BACK -> IconButton(onClick = { nodeScope?.navigateBack() }) {
+                                Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
+                            }
 
-                        Navigation.NONE -> {}
-                    }
-                },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Box(modifier = Modifier.fillMaxSize().weight(1f).verticalScroll(rememberScrollState())) {
+                            Navigation.NONE -> Unit
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            val scrollableModifier = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
+            Box(modifier = Modifier.fillMaxSize().weight(1f) then scrollableModifier) {
                 content()
             }
         }

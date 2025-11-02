@@ -59,7 +59,7 @@ class MovieAdvisor : Node<MovieAdvisor.State>() {
 In the example above, when the node is initialized, it subscribes to a suspend function `suggestMovie`.
 When this function completes, it updates the node's state with the result. Let's break down in detail the init block:
 
-* `subscribe({}) {  }`
+* Subscriptions (**subscribe** and **flowSubscribe**)
 
 Instances of Node can subscribe to suspend functions and flows by calling `subscribe` and `flowSubscribe` methods respectively.
 These subscriptions are cancelled automatically when the node is cleared.
@@ -78,9 +78,10 @@ protected fun <T> flowSubscribe(
 ) 
 ```
 
-* `updateState {  }`
+* **updateState**
 
-The `updateState` function is used to atomically update the Node's state.
+The `updateState` function is used to atomically update the Node's state.  
+You can access the current state via the `state` property.
 
 ```kotlin
 protected fun updateState(
@@ -88,18 +89,13 @@ protected fun updateState(
 )
 ```
 
-* `state.copy(movie = this)`
-
-You can get the current state of the Node using the `state` property.
-
 #### NodeView
 
-To render a Node, you just need to implement a `NodeView` that matches the Node's state. NodeViews are recomposed on any state change.
-This ensures your UI automatically updates efficiently whenever the Node's state changes.
+To render a Node, you need to implement a `NodeView` designed for that Node's state. The `NodeView` automatically recompose whenever the Node's state changes, ensuring your UI is always up-to-date.
 
 ```kotlin
 class MovieAdvisorView(
-    private val listener: ViewListener // The way events are propagated to the Node
+    private val listener: ViewListener // A listener to send events back to the Node
 ) : NodeView<MovieAdvisor.State> {
 
     @Composable
@@ -162,12 +158,90 @@ class MovieDetail(
 
     object State // Empty state for this example
 
+    // This token accepts a 'Movie' object
     class Token(val movie: Movie) : NodeToken {
         override fun node() = node({ MovieDetail(movie.id) }, { State }) {
             MovieView(movie = movie)
         }
     }
 
+}
+```
+
+#### Hosted nodes
+
+A `Node` can host one or more child nodes to build complex screens composed of independent, reusable components. 
+This is perfect for layouts like tabbed interfaces, dashboards with multiple sections, or any screen that combines several distinct pieces of functionality.
+A hosted node can in turn hosts its own children nodes. 
+
+* Key characteristics of hosted nodes:
+- **Inherited Navigator:** Hosted nodes automatically inherit the `Navigator` instance from their host node.
+This means any navigation operations initiated from a hosted node will be forwarded to the host node.
+- **Lifecycle Management:** Hosted nodes are automatically cleared when their host node is cleared.
+
+```kotlin
+class Landing : Node<Landing.State>() {
+
+    object State //Empty state for this example
+
+    object Token : NodeToken {
+        override fun node() = node(::Landing, { State }) { LandingView() }
+    }
+
+    init {
+        // This node hosts two child nodes, the Demo and About nodes
+        host( 
+            Demo.Token, 
+            About.Token
+        )
+    }
+
+}
+```
+
+To host nodes, host node must call `host(vararg nodes: NodeToken)` and pass the tokens of the nodes to be hosted. 
+Calling `host()` again will clear any previously hosted nodes and establish the new ones. You can call `host()` with no arguments to clear all children.
+
+To display hosted nodes in your `NodeView`, you can use of the predefined solutions or build a custom layout with the `HostedNodesHost` composable.
+
+* Predefined HostedNodesHost implementations.
+
+Kioto provides the following ready-to-use solutions for common patterns. 
+
+```kotlin
+// PagerHost, a composable that displays a collections of hosted nodes one at a time, using a pager-like interface.
+// It provides optional slots for displaying content during loading state or when the data set is empty.
+@Composable
+private fun Pager() {
+    Column(modifier = Modifier.fillMaxSize()) {
+        val pagerHostState = rememberPagerHostState()
+        PrimaryTabRow(selectedTabIndex = pagerHostState.currentPage, modifier = Modifier.fillMaxWidth()) {
+            repeat(3) { tabIndex ->
+                Tab(selected = pagerHostState.currentPage == tabIndex, onClick = { pagerHostState.currentPage = tabIndex }, text = { Text(text = "Tab $tabIndex") })
+            }
+        }
+        PagerHost(state = pagerHostState, modifier = Modifier.fillMaxSize().weight(1F))
+    }
+}
+```
+
+* Build your own solution
+
+`HostedNodesHost` gives you full control over how your hosted nodes are rendered. 
+It provides the count of active nodes and a function to render each one by its index. 
+
+```kotlin
+// Renders hosted nodes in a vertically stacked layout, each taking equal space
+Column(modifier = Modifier.fillMaxSize()) {
+  HostedNodesHost { nodes, render ->
+      // `nodes` represents the number of currently hosted nodes, or `null` if host node didn't ask to host any nodes
+      // `render(index)` is a lambda that renders a specific node
+    repeat(nodes ?: 0) { index ->
+      Box(modifier = Modifier.fillMaxSize().weight(1F)) {
+        render(index)
+      }
+    }
+  }
 }
 ```
 
@@ -185,6 +259,7 @@ class MovieAdvisor : Node<MovieAdvisor.State>() {
 
     object Token : NodeToken {
         override fun node() = node(::MovieAdvisor, ::State) {
+            // The 'this' context here is the MovieAdvisor Node instance
             MovieAdvisorView(object : MovieAdvisorView.ViewListener {
                 override fun onSeeMore(movie: Movie) = nav.navigate { MovieDetail.Token(movie) }
             })
@@ -260,13 +335,13 @@ In that case, all subsequent nodes will first be popped until the node requestin
 `NodeNav` is the core component that manages navigation under the hood.
 NodeNav runs regardless of the UI is rendering nodes or not, you just need to create an instance of it and set a `Node` as the root node to start the navigation process.
 There's no limit on the number of `NodeNav` instances you can create, so it's up to you to determine the approach that works best for your application,
-you could have a single global reference to a `NodeNav` instance in your application file or use more elaborate solutions like dependency injection to manage it.
+you could have a single global reference to a `NodeNav` instance in your application file or use more elaborated solutions like dependency injection to manage it.
 For most applications, a single NodeNav instance at the application root is sufficient, but more advanced scenarios might benefit from multiple instances.
 If a `NodeNav` instance's lifecycle is shorter than app's lifecycle, it is necessary to call `release` to ensure proper cleanup of active nodes.
 
 ```kotlin
-val nodeNav = NodeNav().apply {
-    setNavigation { Demo.Token } // Set the initial navigation token
+val nodeNav = NodeNav.newInstance().apply {
+    setNavigation { Landing.Token } // Set the initial navigation token
 }
 ```
 
@@ -398,12 +473,12 @@ made to dismiss that root node, allowing you to define the desired behavior.
 
 
 ```kotlin
-val nodeNav = NodeNav(
+val nodeNav = NodeNav.newInstance(
     context = context(logger provides { Logger(::println) })
 ) { rootToken ->
     // Any attempt to dismiss a root node other than Demo, will take users to Demo node by setting a new navigation. 
     // Having this way Demo as the only exit point for the application.
-    if (rootToken != Demo.Token) return@NodeNav { setNavigation { Demo.Token } } else null
+    if (rootToken != Demo.Token) return@newInstance { setNavigation { Demo.Token } } else null
 }.apply {
     // Initialize the navigation with the first node.
     setNavigation { Demo.Token }
@@ -419,7 +494,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.2.3")
+            implementation("com.wokdsem.kioto:kioto:0.3.0")
         }
     }
 }
@@ -498,12 +573,14 @@ val text = when (platform) {
 Text(text = "Platform: $text")
 ```
 
-* `LocalNodeNavigation` Provides the current `NodeNavigation` instance, which can be used to request a back navigation.
+* `LocalNodeScope` Provides the current `NodeScope` instance, which can be used to request a back navigation and determine if the current node is hosted by another.
 
 ```kotlin
-val nodeNavigation = LocalNodeNavigation.current
-IconButton(onClick = { nodeNavigation?.navigateBack() }) {
-    Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
+val nodeScope = LocalNodeScope.current
+if (nodeScope?.isHosted == false) {
+    IconButton(onClick = { nodeScope.navigateBack() }) {
+        Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
+    }
 }
 ```
 

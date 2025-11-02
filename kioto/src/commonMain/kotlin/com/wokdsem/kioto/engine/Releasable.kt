@@ -1,4 +1,4 @@
-package com.wokdsem.kioto
+package com.wokdsem.kioto.engine
 
 internal fun interface Releasable {
     fun release()

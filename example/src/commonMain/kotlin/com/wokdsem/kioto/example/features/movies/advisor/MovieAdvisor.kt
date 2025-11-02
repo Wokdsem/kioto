@@ -34,7 +34,7 @@ class MovieAdvisor : Node<MovieAdvisor.State>() {
     }
 
     private fun adviseNextMovie() {
-        if (state.loadingNext || state.movie == null) return // Prevent multiple requests
+        if (state.loadingNext || state.movie == null) return // Prevent concurrent requests
         updateState { state.copy(loadingNext = true) }
         subscribe(source = ::suggestMovie) { updateState { state.copy(movie = this, loadingNext = false) } }
     }

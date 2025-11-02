@@ -11,18 +11,21 @@ public val LocalPlatform: ProvidableCompositionLocal<Platform?> = staticComposit
 public enum class Platform { ANDROID, IOS }
 
 /**
- * Composition local for the navigation interface of [NodeNavigation].
- * This is used to request a back action.
+ * Composition local for the scope interface of [NodeScope].
+ * This is used to request a back action and determine if the current node is hosted by another node.
  *
- * @see NodeNavigation
+ * @see NodeScope
  */
-public val LocalNodeNavigation: ProvidableCompositionLocal<NodeNavigation?> = staticCompositionLocalOf { null }
+public val LocalNodeScope: ProvidableCompositionLocal<NodeScope?> = staticCompositionLocalOf { null }
 
-public fun interface NodeNavigation {
+public interface NodeScope {
+    /**
+     * Whether the current node is hosted by another node.
+     */
+    public val isHosted: Boolean
+
     /**
      * Requests a back action from the current node.
      */
     public fun navigateBack()
 }
-
-internal val LocalBackHandler: ProvidableCompositionLocal<BackHandler?> = staticCompositionLocalOf { null }

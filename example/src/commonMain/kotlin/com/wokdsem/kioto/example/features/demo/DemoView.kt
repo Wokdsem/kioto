@@ -29,7 +29,7 @@ internal class DemoView(
 
 @Composable
 private fun Dashboard(state: Demo.State, listener: DemoView.ViewListener) {
-    Screen(title = "Kioto demo") {
+    Screen {
         Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp), verticalArrangement = Arrangement.spacedBy(space = 32.dp)) {
             DemoCard(title = "Movie Advisor", onClick = listener::onMovieAdvisor)
             DemoCard(title = "Kioto navigation", onClick = listener::onNavigation)
