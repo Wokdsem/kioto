@@ -1,6 +1,12 @@
 package com.wokdsem.kioto.host
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,10 +22,12 @@ import androidx.compose.ui.Modifier
 /**
  * A composable that displays a collection of hosted nodes one at a time, using a pager-like interface.
  *
- * It provides optional slots for displaying content during loading state or when the data set is empty.
+ * It provides optional slots for displaying content during loading state or when the hosted node list is empty.
  *
  * @param state The state object to be used for controlling and observing the pager's state.
  * @param modifier The [Modifier] to be applied to this pager host layout.
+ * @param enterTransition The enter transition to be used when a new page is being displayed.
+ * @param exitTransition The exit transition to be used when a page is being removed.
  * @param loading An optional composable lambda to display while hosted node list is being populated.
  * @param empty An optional composable lambda to display when the hosted node list is empty.
  */
@@ -27,6 +35,8 @@ import androidx.compose.ui.Modifier
 public fun PagerHost(
     state: PagerHostState,
     modifier: Modifier = Modifier,
+    enterTransition: EnterTransition = fadeIn(animationSpec = tween(220)),
+    exitTransition: ExitTransition = fadeOut(animationSpec = tween(90)),
     loading: (@Composable () -> Unit)? = null,
     empty: (@Composable () -> Unit)? = null
 ) {
@@ -40,6 +50,7 @@ public fun PagerHost(
             }
             AnimatedContent(
                 targetState = targetState,
+                transitionSpec = { enterTransition togetherWith exitTransition },
                 label = "PagerHostAnimation"
             ) { pagerState ->
                 when (pagerState) {

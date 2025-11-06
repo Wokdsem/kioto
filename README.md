@@ -204,15 +204,25 @@ Calling `host()` again will clear any previously hosted nodes and establish the 
 
 To display hosted nodes in your `NodeView`, you can use of the predefined solutions or build a custom layout with the `HostedNodesHost` composable.
 
-* Predefined HostedNodesHost implementations.
+*Built-in predefined Host Composables*
 
-Kioto provides the following ready-to-use solutions for common patterns. 
+Kioto provides ready-to-use solutions for common hosting patterns: 
 
+- **BoxHost**
+A composable that displays the hosted node at first index. It supports custom loading/empty states and animations.
 ```kotlin
-// PagerHost, a composable that displays a collections of hosted nodes one at a time, using a pager-like interface.
-// It provides optional slots for displaying content during loading state or when the data set is empty.
 @Composable
-private fun Pager() {
+private fun BoxHostSample() {
+    BoxHost(modifier = Modifier.fillMaxSize())
+}
+```
+
+- **PagerHost**
+A composable that displays a collections of hosted nodes one at a time, using a pager-like interface.
+It supports custom loading/empty states and animations.
+```kotlin
+@Composable
+private fun PagerHostSample() {
     Column(modifier = Modifier.fillMaxSize()) {
         val pagerHostState = rememberPagerHostState()
         PrimaryTabRow(selectedTabIndex = pagerHostState.currentPage, modifier = Modifier.fillMaxWidth()) {
@@ -225,7 +235,7 @@ private fun Pager() {
 }
 ```
 
-* Build your own solution
+- Build your own solution
 
 `HostedNodesHost` gives you full control over how your hosted nodes are rendered. 
 It provides the count of active nodes and a function to render each one by its index. 
