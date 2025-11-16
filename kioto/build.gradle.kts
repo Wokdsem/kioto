@@ -32,21 +32,19 @@ android {
 }
 
 private fun DependencyHandler.androidMainImplementation(dependencyNotation: Any) = add("androidMainImplementation", dependencyNotation)
-
+private fun DependencyHandler.iosMainImplementation(dependencyNotation: Any) = add("iosMainImplementation", dependencyNotation)
 dependencies {
     commonMainImplementation(compose.runtime)
     commonMainImplementation(compose.foundation)
     commonMainImplementation(libs.kotlinCoroutines)
     androidMainImplementation(libs.androidAppCompat)
     androidMainImplementation(libs.androidActivityCompose)
+    iosMainImplementation(libs.composeBackHandler)
 }
 
 mavenPublishing {
-    configure(
-        KotlinMultiplatform(
-            javadocJar = JavadocJar.Dokka("dokkaHtml"),
-            sourcesJar = true,
-            androidVariantsToPublish = listOf("release"),
-        )
-    )
+    configure(platform = KotlinMultiplatform(
+        javadocJar = JavadocJar.Dokka("dokkaHtml"),
+        sourcesJar = true
+    ))
 }
