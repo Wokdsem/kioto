@@ -504,7 +504,7 @@ kotlin {
     //...
     sourceSets {
         commonMain.dependencies {
-            implementation("com.wokdsem.kioto:kioto:0.3.0")
+            implementation("com.wokdsem.kioto:kioto:0.4.0")
         }
     }
 }
@@ -572,15 +572,21 @@ struct NodeNavRenderer: UIViewControllerRepresentable {
 
 Kioto provides the following composition locals:
 
-* `LocalPlatform` Provides the current platform type, which can be used to conditionally render platform-specific UI components.
+* `LocalNodeHost` Provides access to the current `NodeHost` instance, allowing any composable to react to the host's state. The `NodeHost` exposes the following properties:
+    * `platform: Platform`: The host platform the app is currently running on (ANDROID or IOS).
+    * `isTransitionInProgress`: A flag that is `true` if a navigation transition between nodes is currently active.
+
+This is particularly useful for building platform-specific UI or for disabling certain interactions during a navigation transition.
 
 ```kotlin
-val platform = LocalPlatform.current
-val text = when (platform) {
-    Platform.ANDROID -> Text("Android")
-    Platform.IOS -> Text("iOS")
+val nodeHost = LocalNodeHost.current ?: return
+if (!nodeHost.isTransitionInProgress) {
+    val platform = when (nodeHost.platform) {
+        Platform.ANDROID -> "Android"
+        Platform.IOS -> "iOS"
+    }
+    Text(text = "Platform: $platform")
 }
-Text(text = "Platform: $text")
 ```
 
 * `LocalNodeScope` Provides the current `NodeScope` instance, which can be used to request a back navigation and determine if the current node is hosted by another.

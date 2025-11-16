@@ -15,6 +15,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -31,8 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Dp
+import com.wokdsem.kioto.LocalNodeHost
 import com.wokdsem.kioto.LocalNodeScope
-import com.wokdsem.kioto.LocalPlatform
+import com.wokdsem.kioto.NodeHost
 import com.wokdsem.kioto.NodeScope
 import com.wokdsem.kioto.Platform
 import com.wokdsem.kioto.engine.Animation.Type
@@ -83,8 +85,15 @@ internal fun NodeHost(bundle: HostBundle) {
         val hostStateHolder = rememberSaveableStateHolder()
         val heldNodes = rememberSaveable { mutableListOf<String>() }
         val visiblePanes = remember { mutableStateOf<List<ActivePane>>(emptyList()) }
+        val isTransitionInProgress = remember { derivedStateOf { visiblePanes.value.size > 1 } }
+        val nodeHost = remember {
+            object : NodeHost {
+                override val isTransitionInProgress: Boolean by isTransitionInProgress
+                override val platform: Platform = bundle.platform
+            }
+        }
         LaunchedEffect(key1 = bundle, key2 = maxWidth) { runHost(visiblePanes, heldNodes, hostStateHolder, bundle, maxWidth) }
-        CompositionLocalProvider(LocalPlatform provides bundle.platform) {
+        CompositionLocalProvider(LocalNodeHost provides nodeHost) {
             Layout(
                 content = {
                     @Composable
