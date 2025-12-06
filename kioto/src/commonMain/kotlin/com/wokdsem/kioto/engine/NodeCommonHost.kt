@@ -98,8 +98,6 @@ internal fun NodeHost(bundle: HostBundle) {
                 content = {
                     @Composable
                     fun <S : Any> Render(stateHolder: SaveableStateHolder, pane: Pane<S>, hosted: Boolean) {
-                        class HostedPanes(val panes: Array<Pane<*>>? = null)
-
                         val nodeScope = remember {
                             object : NodeScope {
                                 override val isHosted: Boolean get() = hosted
@@ -110,20 +108,17 @@ internal fun NodeHost(bundle: HostBundle) {
                             NodeHostScope { content ->
                                 val hostedHostStateHolder = rememberSaveableStateHolder()
                                 val hostedHeldNodes = rememberSaveable { mutableListOf<String>() }
-                                var hostedPanes by remember { mutableStateOf<HostedPanes?>(null) }
-                                LaunchedEffect(pane.hostedPanes) {
-                                    pane.hostedPanes.onEach { hostedNodes ->
-                                        while (hostedHeldNodes.isNotEmpty() && hostedHeldNodes.last() != hostedNodes?.lastOrNull()?.id) {
-                                            hostedHeldNodes.removeLast().let(hostedHostStateHolder::removeState)
-                                        }
-                                        hostedHeldNodes += hostedNodes?.map { it.id } ?: emptyList()
-                                    }.collect { hostedPanes = HostedPanes(it) }
-                                }
-                                if (hostedPanes != null) {
-                                    val panes = hostedPanes?.panes
+                                val hostedPanes = pane.hostedPanes.onEach { hostedNodes ->
+                                    while (hostedHeldNodes.isNotEmpty() && hostedHeldNodes.last() != hostedNodes?.lastOrNull()?.id) {
+                                        hostedHeldNodes.removeLast().let(hostedHostStateHolder::removeState)
+                                    }
+                                    hostedHeldNodes += hostedNodes?.map { it.id } ?: emptyList()
+                                }.collectAsState(pane.hostedPanes.value)
+                                val panes = hostedPanes.value
+                                if (panes != null) {
                                     val renderedNodes = mutableSetOf<Int>()
-                                    content(panes?.size) { paneIndex ->
-                                        if (panes == null || paneIndex < 0 || paneIndex > panes.lastIndex || paneIndex in renderedNodes) return@content
+                                    content(panes.size) { paneIndex ->
+                                        if (paneIndex < 0 || paneIndex > panes.lastIndex || paneIndex in renderedNodes) return@content
                                         renderedNodes += paneIndex
                                         key(paneIndex) {
                                             Render(stateHolder = hostedHostStateHolder, pane = panes[paneIndex], hosted = true)
