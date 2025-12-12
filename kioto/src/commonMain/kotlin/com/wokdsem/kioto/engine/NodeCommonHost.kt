@@ -115,16 +115,14 @@ internal fun NodeHost(bundle: HostBundle) {
                                     hostedHeldNodes += hostedNodes?.map { it.id } ?: emptyList()
                                 }.collectAsState(pane.hostedPanes.value)
                                 val panes = hostedPanes.value
-                                if (panes != null) {
-                                    val renderedNodes = mutableSetOf<Int>()
-                                    content(panes.size) { paneIndex ->
-                                        if (paneIndex < 0 || paneIndex > panes.lastIndex || paneIndex in renderedNodes) return@content
-                                        renderedNodes += paneIndex
-                                        key(paneIndex) {
-                                            Render(stateHolder = hostedHostStateHolder, pane = panes[paneIndex], hosted = true)
-                                            DisposableEffect(Unit) {
-                                                onDispose { renderedNodes -= paneIndex }
-                                            }
+                                val renderedNodes = mutableSetOf<Int>()
+                                content(panes?.size) { paneIndex ->
+                                    if (panes == null || paneIndex < 0 || paneIndex > panes.lastIndex || paneIndex in renderedNodes) return@content
+                                    renderedNodes += paneIndex
+                                    key(paneIndex) {
+                                        Render(stateHolder = hostedHostStateHolder, pane = panes[paneIndex], hosted = true)
+                                        DisposableEffect(Unit) {
+                                            onDispose { renderedNodes -= paneIndex }
                                         }
                                     }
                                 }
