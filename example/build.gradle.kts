@@ -33,16 +33,16 @@ android {
 private fun DependencyHandler.androidMainImplementation(dependencyNotation: Any) = add("androidMainImplementation", dependencyNotation)
 dependencies {
     commonMainApi(project(":kioto"))
-    commonMainImplementation(compose.runtime)
-    commonMainImplementation(compose.foundation)
-    commonMainImplementation(compose.material)
-    commonMainImplementation(compose.material3)
-    commonMainImplementation(compose.materialIconsExtended)
-    commonMainImplementation(compose.components.uiToolingPreview)
+    commonMainImplementation(libs.composeRuntime)
+    commonMainImplementation(libs.composeFoundation)
+    commonMainImplementation(libs.composeMaterial)
+    commonMainImplementation(libs.composeMaterial3)
+    commonMainImplementation(libs.composeMaterialIcons)
+    commonMainImplementation(libs.composeUiToolingPreview)
 
     androidMainImplementation(libs.androidAppCompat)
     androidMainImplementation(libs.androidActivityCompose)
     androidMainImplementation(libs.androidMaterial)
 
-    debugImplementation(compose.uiTooling)
+    debugImplementation(libs.composeUiTooling)
 }

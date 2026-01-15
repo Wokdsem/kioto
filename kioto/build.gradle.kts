@@ -34,8 +34,8 @@ android {
 private fun DependencyHandler.androidMainImplementation(dependencyNotation: Any) = add("androidMainImplementation", dependencyNotation)
 private fun DependencyHandler.iosMainImplementation(dependencyNotation: Any) = add("iosMainImplementation", dependencyNotation)
 dependencies {
-    commonMainImplementation(compose.runtime)
-    commonMainImplementation(compose.foundation)
+    commonMainImplementation(libs.composeRuntime)
+    commonMainImplementation(libs.composeFoundation)
     commonMainImplementation(libs.kotlinCoroutines)
     androidMainImplementation(libs.androidAppCompat)
     androidMainImplementation(libs.androidActivityCompose)

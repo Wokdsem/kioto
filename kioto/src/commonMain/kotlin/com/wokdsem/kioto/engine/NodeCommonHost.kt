@@ -47,6 +47,8 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
@@ -263,13 +265,16 @@ private suspend fun runHost(
 
                 override fun onBackCancelled() {
                     predictiveEvents.trySend {
-                        backPredictiveAnimator.animateTo(0F)
-                        visiblePanes = targetPanes
+                        try {
+                            backPredictiveAnimator.animateTo(0F)
+                        } finally {
+                            visiblePanes = targetPanes
+                        }
                     }
                 }
             })
             try {
-                while (true) predictiveEvents.receive().invoke()
+                predictiveEvents.consumeAsFlow().collectLatest { it.invoke() }
             } catch (e: Throwable) {
                 pastTransitionProgress = 1 - backPredictiveAnimator.value
                 throw e

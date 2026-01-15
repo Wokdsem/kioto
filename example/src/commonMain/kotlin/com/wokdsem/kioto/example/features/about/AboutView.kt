@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.wokdsem.kioto.LocalNodeHost
 import com.wokdsem.kioto.NodeView
 import com.wokdsem.kioto.example.ui.Screen
-import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Preview
 
 internal class AboutView : NodeView<About.State> {
     @Composable

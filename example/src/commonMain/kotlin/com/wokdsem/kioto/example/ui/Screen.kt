@@ -2,6 +2,7 @@ package com.wokdsem.kioto.example.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -45,7 +46,8 @@ fun Screen(
                             Navigation.NONE -> Unit
                         }
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    windowInsets = WindowInsets()
                 )
             }
             val scrollableModifier = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier

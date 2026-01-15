@@ -1,6 +1,6 @@
 [versions]
-kotlin = "2.2.21"
-compose-multiplatform = "1.9.3"
+kotlin = "2.3.0"
+compose-multiplatform = "1.10.0"
 jvm = "21"
 agp = "8.11.2"
 androidMinSdk = "24"
@@ -8,9 +8,18 @@ androidTargetSdk = "36"
 
 [libraries]
 androidAppCompat = "androidx.appcompat:appcompat:1.7.1"
-androidActivityCompose = "androidx.activity:activity-compose:1.12.1"
+androidActivityCompose = "androidx.activity:activity-compose:1.12.2"
 androidMaterial = "com.google.android.material:material:1.13.0"
 composeBackHandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "compose-multiplatform" }
+composeFoundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "compose-multiplatform" }
+composeUiTooling = "androidx.compose.ui:ui-tooling:1.10.1"
+composeUiToolingPreview = { group = "org.jetbrains.compose.ui", name = "ui-tooling-preview", version.ref = "compose-multiplatform" }
+composeRuntime = "androidx.compose.runtime:runtime:1.10.1"
+composeMaterial = { group = "org.jetbrains.compose.material", name = "material", version.ref = "compose-multiplatform" }
+composeMaterial3 = "org.jetbrains.compose.material3:material3:1.9.0"
+composeMaterialIcons = "org.jetbrains.compose.material:material-icons-extended:1.7.3"
+navigationEvent = "androidx.navigationevent:navigationevent:1.0.1"
+navigationEventCompose = "org.jetbrains.androidx.navigationevent:navigationevent-compose:1.0.0"
 kotlinCoroutines = "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2"
 
 [plugins]

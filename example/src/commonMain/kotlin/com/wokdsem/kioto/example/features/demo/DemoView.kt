@@ -9,10 +9,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.wokdsem.kioto.NodeView
 import com.wokdsem.kioto.example.ui.Screen
-import org.jetbrains.compose.ui.tooling.preview.Preview
 
 internal class DemoView(
     private val listener: ViewListener
