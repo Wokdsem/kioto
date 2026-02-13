@@ -52,7 +52,7 @@ internal class NodeNavRunner(
             if (released) return@runOnUiThread
             for (index in stack.indices.reversed()) {
                 stack[index].release()
-                if (presentedStackRecords.lastOrNull()?.stackIndex == index) presentedStackRecords.removeLast().completable?.complete(Unit)
+                if (presentedStackRecords.lastOrNull()?.stackIndex == index) presentedStackRecords.removeAt(presentedStackRecords.lastIndex).completable?.complete(Unit)
             }
             job.cancel()
             released = true
@@ -68,7 +68,7 @@ internal class NodeNavRunner(
         while (stack.isNotEmpty() && release(stack.last())) {
             if (stack.size == 1 && type == NavigationType.POP) return onRootDismissTry?.invoke() ?: Unit
             if (type == NavigationType.REPLACE) lastPresentedStackRecordIndex = evaluatePresentedStack()
-            lastRemovedNode = stack.removeLast().also(NodeRecord::release)
+            lastRemovedNode = stack.removeAt(stack.lastIndex).also(NodeRecord::release)
             if (type != NavigationType.REPLACE) lastPresentedStackRecordIndex = evaluatePresentedStack()
         }
 
@@ -105,7 +105,7 @@ internal class NodeNavRunner(
 
     private fun evaluatePresentedStack(): Int? {
         if (presentedStackRecords.lastOrNull()?.stackIndex != stack.size) return null
-        val stackRecord = presentedStackRecords.removeLast()
+        val stackRecord = presentedStackRecords.removeAt(presentedStackRecords.lastIndex)
         stackRecord.completable?.complete(Unit)
         return stackRecord.stackIndex
     }

@@ -1,6 +1,3 @@
-import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.KotlinMultiplatform
-
 group = "com.wokdsem.kioto"
 
 plugins {
@@ -40,12 +37,4 @@ dependencies {
     androidMainImplementation(libs.androidAppCompat)
     androidMainImplementation(libs.androidActivityCompose)
     iosMainImplementation(libs.composeBackHandler)
-}
-
-mavenPublishing {
-    configure(platform = KotlinMultiplatform(
-        javadocJar = JavadocJar.Dokka("dokkaHtml"),
-        sourcesJar = true,
-        androidVariantsToPublish = listOf("release")
-    ))
 }

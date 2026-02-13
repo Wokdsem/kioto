@@ -112,7 +112,7 @@ internal fun NodeHost(bundle: HostBundle) {
                                 val hostedHeldNodes = rememberSaveable { mutableListOf<String>() }
                                 val hostedPanes = pane.hostedPanes.onEach { hostedNodes ->
                                     while (hostedHeldNodes.isNotEmpty() && hostedHeldNodes.last() != hostedNodes?.lastOrNull()?.id) {
-                                        hostedHeldNodes.removeLast().let(hostedHostStateHolder::removeState)
+                                        hostedHeldNodes.removeAt(hostedHeldNodes.lastIndex).let(hostedHostStateHolder::removeState)
                                     }
                                     hostedHeldNodes += hostedNodes?.map { it.id } ?: emptyList()
                                 }.collectAsState(pane.hostedPanes.value)
